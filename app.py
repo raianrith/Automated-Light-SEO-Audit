@@ -1711,12 +1711,14 @@ def display_pages_results(results):
         )
     
     with col3:
-        pages_50 = results['pareto_thresholds']['50%']
-        concentration = (pages_50 / results['total_pages'] * 100) if pages_50 and results['total_pages'] > 0 else 0
+        # Calculate top 10 pages traffic share - more actionable metric
+        top_10_traffic = results['top_pages'].head(10)['Traffic'].sum() if len(results['top_pages']) >= 10 else results['top_pages']['Traffic'].sum()
+        top_10_share = (top_10_traffic / results['total_traffic'] * 100) if results['total_traffic'] > 0 else 0
+        
         st.metric(
-            label="Traffic Concentration",
-            value=f"{concentration:.1f}%",
-            help=f"{pages_50} pages drive 50% of traffic"
+            label="Top 10 Pages Share",
+            value=f"{top_10_share:.1f}%",
+            help="Percentage of total traffic from your top 10 pages"
         )
     
     with col4:
@@ -1996,35 +1998,558 @@ def query_gains_losses_analysis():
     """Analyze query-level gains and losses from GSC"""
     st.markdown('<div class="section-header">🎯 Query Performance Analysis</div>', unsafe_allow_html=True)
     
-    st.markdown("""
-    <div class="instruction-box">
-        <h4>📋 What This Section Analyzes:</h4>
-        <p>This analysis examines search query performance to identify:</p>
-        <ul>
-            <li><b>Top winning queries</b> - Search terms driving the most additional clicks</li>
-            <li><b>Top losing queries</b> - Search terms losing traffic that need attention</li>
-            <li><b>CTR vs impression changes</b> - Separate demand growth from execution issues</li>
-            <li><b>SERP feature impact</b> - Queries affected by rich snippets, AI overviews, etc.</li>
-        </ul>
+    # Modern instruction design
+    with st.container():
+        st.markdown("### 📊 Analysis Overview")
         
-        <h4>📁 Required Files:</h4>
-        <p>You need <b>1-2 files</b>:</p>
-        <ul>
-            <li><b>GSC Queries Compare</b> - Primary analysis file</li>
-            <li><b>Semrush Positions (current)</b> - Optional enrichment for position context</li>
-        </ul>
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.markdown("""
+            This analysis examines search query performance to identify:
+            
+            **🎯 Key Questions Answered:**
+            - Which search terms are driving the most additional clicks?
+            - Which queries are losing traffic and need attention?
+            - Are click losses due to ranking drops or CTR pressure?
+            - Which queries show SERP feature impact?
+            """)
         
-        <h4>🎯 Key Insights You'll Get:</h4>
-        <ul>
-            <li>Biggest query-level winners and losers</li>
-            <li>CTR pressure vs ranking wins identification</li>
-            <li>Charts showing top movers</li>
-            <li>Position-enriched analysis when available</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
+        with col2:
+            st.info("""
+            **💡 Strategic Value**
+            
+            Separates demand growth from execution issues to prioritize the right optimization efforts.
+            """)
     
-    st.info("🚧 This section will analyze GSC query data with your mixed charts + tables approach!")
+    # File requirements in expandable section
+    with st.expander("📁 **File Requirements & Setup**", expanded=False):
+        st.markdown("""
+        **Required Files:** 1-2 files for comprehensive analysis
+        
+        | File | Purpose | Export From |
+        |------|---------|-------------|
+        | **GSC Queries Compare** | Primary analysis | Search Console → Search Results → Queries (Compare view) |
+        | **Semrush Positions** | Optional enrichment | Organic Research → Positions (current period) |
+        
+        **📋 GSC Export Steps:**
+        1. Go to Search Results in Google Search Console
+        2. Set: Search type = Web
+        3. Set: Date → Compare → Last 3 months vs Same period last year
+        4. Click Queries tab
+        5. Export → CSV or Excel
+        
+        **🔍 Analysis Method:**
+        - Clicks Δ = Current - Previous period
+        - Impressions Δ separates demand vs execution issues
+        - Position context from Semrush (if provided)
+        """)
+    
+    # Key insights preview
+    st.markdown("### 🎯 Analysis Insights You'll Get")
+    
+    insight_col1, insight_col2, insight_col3, insight_col4 = st.columns(4)
+    
+    with insight_col1:
+        st.markdown("""
+        **📈 Top Winners**
+        - Queries with biggest click gains
+        - Growth opportunity patterns
+        """)
+    
+    with insight_col2:
+        st.markdown("""
+        **📉 Top Losers**
+        - Queries losing the most clicks
+        - Decline root cause analysis
+        """)
+    
+    with insight_col3:
+        st.markdown("""
+        **🎯 CTR Pressure**
+        - Impressions up, clicks down cases
+        - SERP feature impact identification
+        """)
+    
+    with insight_col4:
+        st.markdown("""
+        **🏆 Ranking Wins**
+        - Clicks up with flat impressions
+        - Position improvement validation
+        """)
+    
+    st.markdown("---")
+    
+    # File upload section
+    st.markdown("### 📤 Upload Your Data Files")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("#### 📊 GSC Queries Compare (Required)")
+        gsc_queries_file = st.file_uploader(
+            "Upload GSC Queries Compare file",
+            type=['csv', 'xlsx', 'xls'],
+            key="gsc_queries",
+            help="Export from GSC: Search Results → Queries (Compare view)"
+        )
+        
+    with col2:
+        st.markdown("#### 📊 Semrush Positions (Optional)")
+        semrush_positions_file = st.file_uploader(
+            "Upload Semrush Positions file (for enrichment)",
+            type=['csv', 'xlsx', 'xls'],
+            key="semrush_positions_enrich",
+            help="Optional: Adds current position context to query analysis"
+        )
+    
+    # Process files if main file uploaded
+    if gsc_queries_file is not None:
+        # Add Run Analysis button (centered)
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            run_query_analysis = st.button("🚀 Run Query Analysis", key="run_queries", type="primary", use_container_width=True)
+        
+        # Display results outside column context for full width
+        if run_query_analysis:
+            with st.spinner("🔄 Analyzing query performance..."):
+                try:
+                    # Load and validate data
+                    gsc_df = normalize_columns(read_uploaded_file(gsc_queries_file))
+                    
+                    # Optional Semrush enrichment
+                    semrush_df = None
+                    if semrush_positions_file is not None:
+                        semrush_df = normalize_columns(read_uploaded_file(semrush_positions_file))
+                    
+                    # Validate required columns
+                    validation_passed, validation_message = validate_query_data(gsc_df)
+                    
+                    if not validation_passed:
+                        st.error(validation_message)
+                        st.stop()
+                    
+                    # Perform analysis
+                    query_results = analyze_query_performance(gsc_df, semrush_df)
+                    
+                    # Display results - FULL WIDTH
+                    display_query_results(query_results)
+                    
+                except Exception as e:
+                    st.error(f"❌ Error processing files: {str(e)}")
+                    st.info("💡 Please ensure you've uploaded valid GSC Queries Compare file")
+    else:
+        st.info("📤 Please upload a GSC Queries Compare file to begin analysis")
+
+def validate_query_data(df):
+    """Validate the GSC Queries Compare data"""
+    
+    # Find query column
+    query_col = find_column(df.columns, ['top queries', 'query', 'queries'])
+    
+    # Find clicks columns (current and previous)
+    clicks_current = find_column(df.columns, ['last 3 months clicks', 'clicks']) or \
+                    find_column(df.columns, ['click']) and find_column(df.columns, ['last 3', 'current', 'now'])
+    
+    clicks_previous = find_column(df.columns, ['previous 3 months clicks', 'same period last year clicks']) or \
+                     find_column(df.columns, ['click']) and find_column(df.columns, ['previous', 'prev', 'last year'])
+    
+    missing_columns = []
+    if not query_col:
+        missing_columns.append('Query/Top Queries')
+    if not clicks_current:
+        missing_columns.append('Current Period Clicks')
+    if not clicks_previous:
+        missing_columns.append('Previous Period Clicks')
+    
+    if missing_columns:
+        return False, f"❌ Missing required columns: {missing_columns}. Available columns: {list(df.columns)[:10]}"
+    
+    if len(df) == 0:
+        return False, "❌ File appears to be empty"
+    
+    return True, "✅ Data validation passed"
+
+def analyze_query_performance(gsc_df, semrush_df=None):
+    """Analyze query performance following the prototype methodology"""
+    
+    # Find columns with flexible matching
+    def pick_column(columns, must_include=None, any_of=None):
+        must_include = [t.lower() for t in (must_include or [])]
+        any_of = [t.lower() for t in (any_of or [])]
+        for c in columns:
+            lc = c.lower()
+            if all(t in lc for t in must_include) and (not any_of or any(t in lc for t in any_of)):
+                return c
+        return None
+    
+    cols = list(gsc_df.columns)
+    
+    # Find GSC columns
+    query_col = find_column(cols, ['top queries', 'query'])
+    clicks_now = pick_column(cols, must_include=['click'], any_of=['last 3', 'current', 'now']) or \
+                pick_column(cols, must_include=['last 3 months'], any_of=['click'])
+    clicks_prev = pick_column(cols, must_include=['click'], any_of=['previous', 'prev', 'same period']) or \
+                 pick_column(cols, must_include=['previous 3 months'], any_of=['click'])
+    impr_now = pick_column(cols, must_include=['impression'], any_of=['last 3', 'current', 'now']) or \
+               pick_column(cols, must_include=['last 3 months'], any_of=['impression'])
+    impr_prev = pick_column(cols, must_include=['impression'], any_of=['previous', 'prev', 'same period']) or \
+                pick_column(cols, must_include=['previous 3 months'], any_of=['impression'])
+    
+    # Build working dataframe
+    work_df = pd.DataFrame()
+    work_df['Query'] = gsc_df[query_col].astype(str).str.strip()
+    work_df['Clicks_Now'] = pd.to_numeric(gsc_df[clicks_now], errors='coerce')
+    work_df['Clicks_Prev'] = pd.to_numeric(gsc_df[clicks_prev], errors='coerce')
+    
+    if impr_now and impr_prev:
+        work_df['Impr_Now'] = pd.to_numeric(gsc_df[impr_now], errors='coerce')
+        work_df['Impr_Prev'] = pd.to_numeric(gsc_df[impr_prev], errors='coerce')
+    else:
+        work_df['Impr_Now'] = np.nan
+        work_df['Impr_Prev'] = np.nan
+    
+    # Aggregate by query (in case of duplicates)
+    agg_df = work_df.groupby('Query', as_index=False).agg({
+        'Clicks_Now': 'sum',
+        'Clicks_Prev': 'sum', 
+        'Impr_Now': 'sum',
+        'Impr_Prev': 'sum'
+    })
+    
+    # Calculate deltas and percentages
+    agg_df['Clicks_Delta'] = (agg_df['Clicks_Now'] - agg_df['Clicks_Prev']).round(2)
+    agg_df['Impr_Delta'] = (agg_df['Impr_Now'] - agg_df['Impr_Prev']).round(2)
+    agg_df['Clicks_Pct_Change'] = np.where(agg_df['Clicks_Prev'] > 0, 
+                                          (agg_df['Clicks_Delta'] / agg_df['Clicks_Prev'] * 100).round(2), 
+                                          np.nan)
+    agg_df['Impr_Pct_Change'] = np.where(agg_df['Impr_Prev'] > 0,
+                                        (agg_df['Impr_Delta'] / agg_df['Impr_Prev'] * 100).round(2),
+                                        np.nan)
+    
+    # Calculate CTR for both periods
+    agg_df['CTR_Now'] = np.where(agg_df['Impr_Now'] > 0, 
+                                (agg_df['Clicks_Now'] / agg_df['Impr_Now'] * 100).round(2), 
+                                np.nan)
+    agg_df['CTR_Prev'] = np.where(agg_df['Impr_Prev'] > 0,
+                                 (agg_df['Clicks_Prev'] / agg_df['Impr_Prev'] * 100).round(2),
+                                 np.nan)
+    agg_df['CTR_Delta_PP'] = (agg_df['CTR_Now'] - agg_df['CTR_Prev']).round(2)
+    
+    # Semrush enrichment if provided
+    if semrush_df is not None:
+        try:
+            kw_col = find_column(semrush_df.columns, ['keyword'])
+            pos_col = find_column(semrush_df.columns, ['position'])
+            
+            if kw_col and pos_col:
+                semrush_work = semrush_df.rename(columns={kw_col: 'Keyword', pos_col: 'Position'})
+                semrush_work['Query_Lower'] = semrush_work['Keyword'].astype(str).str.lower().str.strip()
+                semrush_positions = semrush_work.set_index('Query_Lower')['Position']
+                agg_df['Semrush_Position'] = agg_df['Query'].str.lower().map(semrush_positions)
+        except:
+            pass  # Skip enrichment if there's any issue
+    
+    # Top winners and losers
+    top_winners = agg_df.sort_values('Clicks_Delta', ascending=False).head(20)
+    top_losers = agg_df.sort_values('Clicks_Delta', ascending=True).head(20)
+    
+    # CTR pressure analysis (impressions up, clicks down)
+    ctr_pressure = agg_df[(agg_df['Impr_Delta'] > 0) & (agg_df['Clicks_Delta'] < 0)].sort_values(['Impr_Delta', 'Clicks_Delta'], ascending=[False, True])
+    
+    # CTR wins (clicks up with impressions flat ±5%)
+    impr_flat_mask = (agg_df['Impr_Prev'] > 0) & (abs(agg_df['Impr_Delta'] / agg_df['Impr_Prev']) <= 0.05)
+    ctr_wins = agg_df[impr_flat_mask & (agg_df['Clicks_Delta'] > 0)].sort_values('Clicks_Delta', ascending=False)
+    
+    # Summary metrics
+    total_clicks_now = agg_df['Clicks_Now'].sum()
+    total_clicks_prev = agg_df['Clicks_Prev'].sum()
+    total_impr_now = agg_df['Impr_Now'].sum() 
+    total_impr_prev = agg_df['Impr_Prev'].sum()
+    
+    return {
+        'total_queries': len(agg_df),
+        'total_clicks_delta': total_clicks_now - total_clicks_prev,
+        'total_clicks_pct_change': ((total_clicks_now - total_clicks_prev) / total_clicks_prev * 100) if total_clicks_prev > 0 else 0,
+        'total_impr_delta': total_impr_now - total_impr_prev,
+        'total_impr_pct_change': ((total_impr_now - total_impr_prev) / total_impr_prev * 100) if total_impr_prev > 0 else 0,
+        'weighted_ctr_now': (total_clicks_now / total_impr_now * 100) if total_impr_now > 0 else np.nan,
+        'weighted_ctr_prev': (total_clicks_prev / total_impr_prev * 100) if total_impr_prev > 0 else np.nan,
+        'top_winners': top_winners,
+        'top_losers': top_losers, 
+        'ctr_pressure': ctr_pressure.head(25),
+        'ctr_wins': ctr_wins.head(25),
+        'raw_data': agg_df,
+        'has_semrush': 'Semrush_Position' in agg_df.columns
+    }
+
+def display_query_results(results):
+    """Display query performance analysis results"""
+    
+    # Key metrics
+    st.markdown('<div class="section-header">📈 Query Performance Summary</div>', unsafe_allow_html=True)
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric(
+            label="Total Queries",
+            value=f"{results['total_queries']:,}"
+        )
+    
+    with col2:
+        delta_color = "normal" if results['total_clicks_delta'] >= 0 else "inverse"
+        st.metric(
+            label="Total Clicks Change",
+            value=f"{results['total_clicks_delta']:,}",
+            delta=f"{results['total_clicks_pct_change']:+.1f}%",
+            delta_color=delta_color
+        )
+    
+    with col3:
+        delta_color = "normal" if results['total_impr_delta'] >= 0 else "inverse"
+        st.metric(
+            label="Total Impressions Change", 
+            value=f"{results['total_impr_delta']:,}",
+            delta=f"{results['total_impr_pct_change']:+.1f}%",
+            delta_color=delta_color
+        )
+    
+    with col4:
+        if not pd.isna(results['weighted_ctr_now']) and not pd.isna(results['weighted_ctr_prev']):
+            ctr_delta = results['weighted_ctr_now'] - results['weighted_ctr_prev']
+            st.metric(
+                label="Weighted CTR",
+                value=f"{results['weighted_ctr_now']:.2f}%",
+                delta=f"{ctr_delta:+.2f}pp",
+                help="Site-wide click-through rate (total clicks / total impressions)"
+            )
+        else:
+            st.metric(label="Weighted CTR", value="N/A", help="Impression data not available")
+    
+    # Top Winners and Losers Charts
+    st.markdown('<div class="section-header">📊 Top Query Movers</div>', unsafe_allow_html=True)
+    
+    # Top Winners Chart
+    if not results['top_winners'].empty:
+        top_winners_chart = results['top_winners'].head(15).copy()
+        
+        fig_winners = go.Figure(data=[
+            go.Bar(
+                y=top_winners_chart['Query'],
+                x=top_winners_chart['Clicks_Delta'],
+                orientation='h',
+                marker_color='#2ecc71',
+                text=[f"+{val:,.0f}" for val in top_winners_chart['Clicks_Delta']],
+                textposition='outside'
+            )
+        ])
+        
+        fig_winners.update_layout(
+            title=dict(text='Top 15 Winning Queries by Clicks Δ', font=dict(size=20)),
+            xaxis_title='Clicks Δ (Additional Clicks)',
+            yaxis_title='Query',
+            height=600,
+            margin=dict(l=250, r=60, t=80, b=60),
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            yaxis=dict(autorange='reversed')
+        )
+        
+        st.plotly_chart(fig_winners, use_container_width=True, config={'displayModeBar': False})
+    
+    # Top Losers Chart  
+    if not results['top_losers'].empty:
+        top_losers_chart = results['top_losers'].head(15).copy()
+        
+        fig_losers = go.Figure(data=[
+            go.Bar(
+                y=top_losers_chart['Query'],
+                x=top_losers_chart['Clicks_Delta'],
+                orientation='h', 
+                marker_color='#e74c3c',
+                text=[f"{val:,.0f}" for val in top_losers_chart['Clicks_Delta']],
+                textposition='outside'
+            )
+        ])
+        
+        fig_losers.update_layout(
+            title=dict(text='Top 15 Losing Queries by Clicks Δ', font=dict(size=20)),
+            xaxis_title='Clicks Δ (Lost Clicks)',
+            yaxis_title='Query',
+            height=600,
+            margin=dict(l=250, r=60, t=80, b=60),
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            yaxis=dict(autorange='reversed')
+        )
+        
+        st.plotly_chart(fig_losers, use_container_width=True, config={'displayModeBar': False})
+    
+    # CTR Analysis Tables
+    analysis_tab1, analysis_tab2 = st.tabs(["🎯 CTR Pressure Analysis", "🏆 CTR/Ranking Wins"])
+    
+    with analysis_tab1:
+        st.markdown("### CTR/SERP Headwinds - Impressions ↑ but Clicks ↓")
+        st.markdown("*Visibility rose but clicks fell - likely CTR or SERP-feature pressure*")
+        
+        if not results['ctr_pressure'].empty:
+            display_cols = ['Query', 'Clicks_Prev', 'Clicks_Now', 'Clicks_Delta', 'Impr_Prev', 'Impr_Now', 'Impr_Delta', 'CTR_Prev', 'CTR_Now', 'CTR_Delta_PP']
+            if results['has_semrush']:
+                display_cols.append('Semrush_Position')
+            
+            available_cols = [col for col in display_cols if col in results['ctr_pressure'].columns]
+            st.dataframe(results['ctr_pressure'][available_cols], use_container_width=True, hide_index=True, height=400)
+        else:
+            st.info("No queries found with impression gains but click losses")
+    
+    with analysis_tab2:
+        st.markdown("### Likely CTR/Ranking Wins - Clicks ↑ with Impressions ~Flat (±5%)")
+        st.markdown("*Clicks rose without much impression change - better CTR or rankings*")
+        
+        if not results['ctr_wins'].empty:
+            display_cols = ['Query', 'Clicks_Prev', 'Clicks_Now', 'Clicks_Delta', 'Impr_Prev', 'Impr_Now', 'Impr_Delta', 'CTR_Prev', 'CTR_Now', 'CTR_Delta_PP']
+            if results['has_semrush']:
+                display_cols.append('Semrush_Position')
+            
+            available_cols = [col for col in display_cols if col in results['ctr_wins'].columns]
+            st.dataframe(results['ctr_wins'][available_cols], use_container_width=True, hide_index=True, height=400)
+        else:
+            st.info("No queries found with click gains and flat impressions")
+    
+    # Strategic insights
+    st.markdown('<div class="section-header">💡 Strategic Insights</div>', unsafe_allow_html=True)
+    insights = generate_query_insights(results)
+    st.markdown(f'<div class="insight-box">{insights}</div>', unsafe_allow_html=True)
+    
+    # Download section
+    st.markdown('<div class="section-header">📥 Download Results</div>', unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        summary_report = create_query_summary_report(results)
+        st.download_button(
+            label="📄 Download Query Analysis Report",
+            data=summary_report,
+            file_name=f"query_performance_analysis_{datetime.now().strftime('%Y%m%d')}.txt",
+            mime="text/plain"
+        )
+    
+    with col2:
+        # Convert top movers to CSV
+        csv_buffer = io.StringIO()
+        combined_queries = pd.concat([
+            results['top_winners'].head(15).assign(Type='Winner'),
+            results['top_losers'].head(15).assign(Type='Loser')
+        ])
+        combined_queries.to_csv(csv_buffer, index=False)
+        
+        st.download_button(
+            label="📊 Download Top Queries (CSV)",
+            data=csv_buffer.getvalue(),
+            file_name=f"query_top_movers_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv"
+        )
+
+def generate_query_insights(results):
+    """Generate strategic insights from query performance analysis"""
+    insights = []
+    
+    clicks_delta = results['total_clicks_delta']
+    impr_delta = results['total_impr_delta']
+    clicks_pct = results['total_clicks_pct_change']
+    impr_pct = results['total_impr_pct_change']
+    
+    # Overall trend analysis
+    if clicks_delta < 0 and impr_delta > 0:
+        insights.append(f"<b>🔴 CTR Pressure Pattern:</b> Clicks down {abs(clicks_delta):,} ({clicks_pct:.1f}%) while impressions up {impr_delta:,} ({impr_pct:.1f}%) - likely SERP feature or competitive pressure rather than demand drop.")
+    elif clicks_delta < 0 and impr_delta < 0:
+        insights.append(f"<b>🟡 Demand Decline:</b> Both clicks ({clicks_pct:.1f}%) and impressions ({impr_pct:.1f}%) declined - check seasonality, page losses, or indexing issues.")
+    elif clicks_delta > 0 and impr_delta > 0:
+        insights.append(f"<b>🟢 Broad Growth:</b> Both clicks (+{clicks_delta:,}) and impressions (+{impr_delta:,}) increased - strong overall SEO momentum.")
+    elif clicks_delta > 0 and impr_delta <= 0:
+        insights.append(f"<b>🟢 Efficiency Gains:</b> Clicks up {clicks_delta:,} despite flat/declining impressions - improved CTR or rankings.")
+    
+    # CTR analysis
+    if not pd.isna(results['weighted_ctr_now']) and not pd.isna(results['weighted_ctr_prev']):
+        ctr_change = results['weighted_ctr_now'] - results['weighted_ctr_prev']
+        if abs(ctr_change) > 0.5:
+            direction = "improved" if ctr_change > 0 else "declined"
+            insights.append(f"<b>📊 CTR Trend:</b> Site-wide CTR {direction} by {abs(ctr_change):.2f} percentage points - {('strong positive signal' if ctr_change > 0 else 'needs investigation')}.")
+    
+    # Pressure vs wins analysis
+    pressure_count = len(results['ctr_pressure'])
+    wins_count = len(results['ctr_wins'])
+    
+    if pressure_count > wins_count * 2:
+        insights.append(f"<b>⚠️ SERP Pressure:</b> {pressure_count} queries show CTR pressure vs {wins_count} clear wins - focus on snippet optimization and competitive analysis.")
+    elif wins_count > pressure_count:
+        insights.append(f"<b>🎯 Ranking Success:</b> {wins_count} queries show clear CTR/ranking wins vs {pressure_count} under pressure - momentum is positive.")
+    
+    # Semrush context
+    if results['has_semrush']:
+        insights.append("<b>🔍 Position Context:</b> Semrush position data included for additional ranking context on query changes.")
+    
+    return "<br><br>".join(insights)
+
+def create_query_summary_report(results):
+    """Create downloadable query analysis report"""
+    
+    ctr_change = results['weighted_ctr_now'] - results['weighted_ctr_prev'] if (not pd.isna(results['weighted_ctr_now']) and not pd.isna(results['weighted_ctr_prev'])) else np.nan
+    
+    report = f"""
+QUERY PERFORMANCE ANALYSIS REPORT
+Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+===========================================
+EXECUTIVE SUMMARY
+===========================================
+
+Total Queries Analyzed: {results['total_queries']:,}
+
+Performance Changes:
+• Total Clicks Change: {results['total_clicks_delta']:,} ({results['total_clicks_pct_change']:+.1f}%)
+• Total Impressions Change: {results['total_impr_delta']:,} ({results['total_impr_pct_change']:+.1f}%)
+• Weighted CTR Change: {ctr_change:+.2f}pp (if available)
+
+Analysis Segments:
+• CTR Pressure Cases: {len(results['ctr_pressure'])} queries
+• CTR/Ranking Wins: {len(results['ctr_wins'])} queries
+
+===========================================
+TOP WINNING QUERIES (Sample)
+===========================================
+
+"""
+    
+    for _, row in results['top_winners'].head(10).iterrows():
+        semrush_info = f" | Pos: {row['Semrush_Position']}" if 'Semrush_Position' in row and pd.notna(row['Semrush_Position']) else ""
+        report += f"• {row['Query']} | +{row['Clicks_Delta']:.0f} clicks ({row['Clicks_Pct_Change']:+.1f}%){semrush_info}\n"
+    
+    report += f"""
+
+===========================================
+TOP LOSING QUERIES (Sample)
+===========================================
+
+"""
+    
+    for _, row in results['top_losers'].head(10).iterrows():
+        semrush_info = f" | Pos: {row['Semrush_Position']}" if 'Semrush_Position' in row and pd.notna(row['Semrush_Position']) else ""
+        report += f"• {row['Query']} | {row['Clicks_Delta']:.0f} clicks ({row['Clicks_Pct_Change']:+.1f}%){semrush_info}\n"
+    
+    report += f"""
+
+===========================================
+STRATEGIC INSIGHTS
+===========================================
+
+{generate_query_insights(results).replace('<b>', '').replace('</b>', '').replace('<br><br>', '\n\n').replace('🟢', '• ').replace('🟡', '• ').replace('🔴', '• ').replace('🎯', '• ').replace('⚠️', '• ').replace('📊', '• ').replace('🔍', '• ')}
+
+===========================================
+"""
+    
+    return report
 
 def competitor_analysis():
     """Analyze competitor rankings and gaps"""
