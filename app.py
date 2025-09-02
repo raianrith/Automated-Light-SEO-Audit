@@ -264,32 +264,35 @@ def keyword_visibility_analysis():
     
     # Process files if both are uploaded
     if current_file is not None and previous_file is not None:
-        # Add Run Analysis button
+        # Add Run Analysis button (centered)
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
-            if st.button("🚀 Run Visibility Analysis", key="run_visibility", type="primary", use_container_width=True):
-                with st.spinner("🔄 Processing your data..."):
-                    try:
-                        # Load data using helper functions
-                        current_df = normalize_columns(read_uploaded_file(current_file))
-                        previous_df = normalize_columns(read_uploaded_file(previous_file))
-                        
-                        # Validate data
-                        validation_passed, validation_message = validate_positions_data(current_df, previous_df)
-                        
-                        if not validation_passed:
-                            st.markdown(f'<div class="warning-box">{validation_message}</div>', unsafe_allow_html=True)
-                            return
-                        
-                        # Perform analysis
-                        analysis_results = analyze_keyword_visibility(current_df, previous_df)
-                        
-                        # Display results
-                        display_visibility_results(analysis_results)
-                        
-                    except Exception as e:
-                        st.error(f"❌ Error processing files: {str(e)}")
-                        st.info("💡 Please ensure you've uploaded valid Semrush Positions CSV or Excel files")
+            run_analysis = st.button("🚀 Run Visibility Analysis", key="run_visibility", type="primary", use_container_width=True)
+        
+        # Display results outside column context for full width
+        if run_analysis:
+            with st.spinner("🔄 Processing your data..."):
+                try:
+                    # Load data using helper functions
+                    current_df = normalize_columns(read_uploaded_file(current_file))
+                    previous_df = normalize_columns(read_uploaded_file(previous_file))
+                    
+                    # Validate data
+                    validation_passed, validation_message = validate_positions_data(current_df, previous_df)
+                    
+                    if not validation_passed:
+                        st.markdown(f'<div class="warning-box">{validation_message}</div>', unsafe_allow_html=True)
+                        st.stop()
+                    
+                    # Perform analysis
+                    analysis_results = analyze_keyword_visibility(current_df, previous_df)
+                    
+                    # Display results - NOW IN FULL WIDTH
+                    display_visibility_results(analysis_results)
+                    
+                except Exception as e:
+                    st.error(f"❌ Error processing files: {str(e)}")
+                    st.info("💡 Please ensure you've uploaded valid Semrush Positions CSV or Excel files")
     else:
         if current_file is None:
             st.info("📤 Please upload the current period Semrush Positions file")
@@ -894,31 +897,34 @@ def keyword_movement_analysis():
     
     # Process file if uploaded
     if position_changes_file is not None:
-        # Add Run Analysis button
+        # Add Run Analysis button (centered)
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
-            if st.button("🚀 Run Movement Analysis", key="run_movement", type="primary", use_container_width=True):
-                with st.spinner("🔄 Analyzing keyword movements..."):
-                    try:
-                        # Load and validate data
-                        df = normalize_columns(read_uploaded_file(position_changes_file))
-                        
-                        # Validate required columns
-                        validation_passed, validation_message = validate_movement_data(df)
-                        
-                        if not validation_passed:
-                            st.markdown(f'<div class="warning-box">{validation_message}</div>', unsafe_allow_html=True)
-                            return
-                        
-                        # Perform analysis
-                        movement_results = analyze_keyword_movement(df)
-                        
-                        # Display results
-                        display_movement_results(movement_results)
-                        
-                    except Exception as e:
-                        st.error(f"❌ Error processing file: {str(e)}")
-                        st.info("💡 Please ensure you've uploaded a valid Semrush Position Changes file")
+            run_movement_analysis = st.button("🚀 Run Movement Analysis", key="run_movement", type="primary", use_container_width=True)
+        
+        # Display results outside column context for full width
+        if run_movement_analysis:
+            with st.spinner("🔄 Analyzing keyword movements..."):
+                try:
+                    # Load and validate data
+                    df = normalize_columns(read_uploaded_file(position_changes_file))
+                    
+                    # Validate required columns
+                    validation_passed, validation_message = validate_movement_data(df)
+                    
+                    if not validation_passed:
+                        st.markdown(f'<div class="warning-box">{validation_message}</div>', unsafe_allow_html=True)
+                        st.stop()
+                    
+                    # Perform analysis
+                    movement_results = analyze_keyword_movement(df)
+                    
+                    # Display results - NOW IN FULL WIDTH
+                    display_movement_results(movement_results)
+                    
+                except Exception as e:
+                    st.error(f"❌ Error processing file: {str(e)}")
+                    st.info("💡 Please ensure you've uploaded a valid Semrush Position Changes file")
     else:
         st.info("📤 Please upload a Semrush Position Changes file to begin analysis")
 
