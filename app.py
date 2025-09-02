@@ -4,6 +4,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import numpy as np
+import re
 from datetime import datetime
 import io
 
@@ -175,6 +176,33 @@ def main():
         st.markdown("---")
         st.markdown("**💬 Have specific analysis needs? The framework is designed to be extensible!**")
 
+# Helper functions for file processing
+def read_uploaded_file(uploaded_file):
+    """Read uploaded CSV or Excel file"""
+    if uploaded_file is not None:
+        file_name = uploaded_file.name.lower()
+        if file_name.endswith('.xlsx') or file_name.endswith('.xls'):
+            return pd.read_excel(uploaded_file)
+        else:
+            return pd.read_csv(uploaded_file)
+    return None
+
+def normalize_columns(df):
+    """Normalize column names by cleaning whitespace and special characters"""
+    df = df.copy()
+    df.columns = [re.sub(r"\s+", " ", str(c).replace("\xa0", " ")).strip() for c in df.columns]
+    return df
+
+def find_column(columns, patterns):
+    """Find column by searching for patterns (case-insensitive)"""
+    columns_lower = {str(c).lower(): c for c in columns}
+    for pattern in patterns:
+        pattern_lower = pattern.lower()
+        for col_lower, original_col in columns_lower.items():
+            if pattern_lower in col_lower:
+                return original_col
+    return None
+
 def keyword_visibility_analysis():
     st.markdown('<div class="section-header">🔍 Keyword Visibility Trends (Year-over-Year)</div>', unsafe_allow_html=True)
     
@@ -213,19 +241,19 @@ def keyword_visibility_analysis():
     with col1:
         st.markdown("#### 📤 Current Period (2024/2025)")
         current_file = st.file_uploader(
-            "Upload current Semrush Positions CSV",
-            type=['csv'],
+            "Upload current Semrush Positions file",
+            type=['csv', 'xlsx', 'xls'],
             key="current_positions",
-            help="Export from Semrush: Domain Analytics → Organic Research → Positions"
+            help="Export from Semrush: Domain Analytics → Organic Research → Positions (CSV or Excel format)"
         )
         
     with col2:
         st.markdown("#### 📤 Previous Period (Same Month Last Year)")
         previous_file = st.file_uploader(
-            "Upload previous year Semrush Positions CSV", 
-            type=['csv'],
+            "Upload previous year Semrush Positions file", 
+            type=['csv', 'xlsx', 'xls'],
             key="previous_positions",
-            help="Same export but for the corresponding month last year"
+            help="Same export but for the corresponding month last year (CSV or Excel format)"
         )
     
     st.markdown('</div>', unsafe_allow_html=True)
@@ -234,9 +262,9 @@ def keyword_visibility_analysis():
     if current_file is not None and previous_file is not None:
         with st.spinner("🔄 Processing your data..."):
             try:
-                # Load data
-                current_df = pd.read_csv(current_file)
-                previous_df = pd.read_csv(previous_file)
+                # Load data using helper functions
+                current_df = normalize_columns(read_uploaded_file(current_file))
+                previous_df = normalize_columns(read_uploaded_file(previous_file))
                 
                 # Validate data
                 validation_passed, validation_message = validate_positions_data(current_df, previous_df)
@@ -253,7 +281,7 @@ def keyword_visibility_analysis():
                 
             except Exception as e:
                 st.error(f"❌ Error processing files: {str(e)}")
-                st.info("💡 Please ensure you've uploaded valid Semrush Positions CSV files")
+                st.info("💡 Please ensure you've uploaded valid Semrush Positions CSV or Excel files")
 
 def validate_positions_data(current_df, previous_df):
     """Validate the uploaded Semrush positions data"""
