@@ -264,28 +264,37 @@ def keyword_visibility_analysis():
     
     # Process files if both are uploaded
     if current_file is not None and previous_file is not None:
-        with st.spinner("🔄 Processing your data..."):
-            try:
-                # Load data using helper functions
-                current_df = normalize_columns(read_uploaded_file(current_file))
-                previous_df = normalize_columns(read_uploaded_file(previous_file))
-                
-                # Validate data
-                validation_passed, validation_message = validate_positions_data(current_df, previous_df)
-                
-                if not validation_passed:
-                    st.markdown(f'<div class="warning-box">{validation_message}</div>', unsafe_allow_html=True)
-                    return
-                
-                # Perform analysis
-                analysis_results = analyze_keyword_visibility(current_df, previous_df)
-                
-                # Display results
-                display_visibility_results(analysis_results)
-                
-            except Exception as e:
-                st.error(f"❌ Error processing files: {str(e)}")
-                st.info("💡 Please ensure you've uploaded valid Semrush Positions CSV or Excel files")
+        # Add Run Analysis button
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            if st.button("🚀 Run Visibility Analysis", key="run_visibility", type="primary", use_container_width=True):
+                with st.spinner("🔄 Processing your data..."):
+                    try:
+                        # Load data using helper functions
+                        current_df = normalize_columns(read_uploaded_file(current_file))
+                        previous_df = normalize_columns(read_uploaded_file(previous_file))
+                        
+                        # Validate data
+                        validation_passed, validation_message = validate_positions_data(current_df, previous_df)
+                        
+                        if not validation_passed:
+                            st.markdown(f'<div class="warning-box">{validation_message}</div>', unsafe_allow_html=True)
+                            return
+                        
+                        # Perform analysis
+                        analysis_results = analyze_keyword_visibility(current_df, previous_df)
+                        
+                        # Display results
+                        display_visibility_results(analysis_results)
+                        
+                    except Exception as e:
+                        st.error(f"❌ Error processing files: {str(e)}")
+                        st.info("💡 Please ensure you've uploaded valid Semrush Positions CSV or Excel files")
+    else:
+        if current_file is None:
+            st.info("📤 Please upload the current period Semrush Positions file")
+        if previous_file is None:
+            st.info("📤 Please upload the previous period Semrush Positions file")
 
 def validate_positions_data(current_df, previous_df):
     """Validate the uploaded Semrush positions data"""
@@ -825,7 +834,7 @@ def keyword_movement_analysis():
         <ul>
             <li><b>Movement distribution</b> - How many keywords improved, declined, or stayed unchanged</li>
             <li><b>Top winners and losers</b> - Specific keywords with biggest ranking changes</li>
-            <li><b>Improved:Declined ratio</b> - Overall trend momentum</li>
+            <li><b>Improved:Declined ratio</b> - Overall trend momentum indicator</li>
             <li><b>Ranking flow analysis</b> - Where keywords moved between ranking buckets</li>
         </ul>
         
@@ -833,6 +842,8 @@ def keyword_movement_analysis():
         <p>You need <b>1 Semrush Position Changes file</b>:</p>
         <ul>
             <li><b>Position Changes export</b> from Semrush (last 12 months recommended)</li>
+            <li>Must include: Keyword, Position, Previous Position columns</li>
+            <li>Optional: URL column for additional context</li>
         </ul>
         
         <h4>🎯 Key Insights You'll Get:</h4>
@@ -840,12 +851,475 @@ def keyword_movement_analysis():
             <li>Movement distribution with improved:declined ratio</li>
             <li>Top improving keywords (prioritizing #1 rankings)</li>
             <li>Top declining keywords requiring attention</li>
-            <li>Ranking flow between position buckets</li>
+            <li>Ranking flow between position buckets (Top 3, 4-10, etc.)</li>
+            <li>Sources of new top 3 rankings</li>
+        </ul>
+        
+        <h4>🔍 Methodology Note:</h4>
+        <p>This analysis treats <b>Position = 0 as "not ranked"</b> (worst position). This means:</p>
+        <ul>
+            <li>Falling out of rankings (→0) counts as <b>Declined</b></li>
+            <li>Newly ranked keywords (0→#) count as <b>Improved</b></li>
+            <li>Movement calculation excludes artificial cases</li>
         </ul>
     </div>
     """, unsafe_allow_html=True)
     
-    st.info("🚧 This section is coming next! Based on your Colab prototype's keyword movement analysis.")
+    # File upload section
+    st.markdown('<div class="file-upload-section">', unsafe_allow_html=True)
+    st.markdown("#### 📤 Upload Position Changes Data")
+    
+    position_changes_file = st.file_uploader(
+        "Upload Semrush Position Changes file",
+        type=['csv', 'xlsx', 'xls'],
+        key="position_changes",
+        help="Export from Semrush: Organic Research → Position Changes (CSV or Excel format)"
+    )
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Process file if uploaded
+    if position_changes_file is not None:
+        # Add Run Analysis button
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            if st.button("🚀 Run Movement Analysis", key="run_movement", type="primary", use_container_width=True):
+                with st.spinner("🔄 Analyzing keyword movements..."):
+                    try:
+                        # Load and validate data
+                        df = normalize_columns(read_uploaded_file(position_changes_file))
+                        
+                        # Validate required columns
+                        validation_passed, validation_message = validate_movement_data(df)
+                        
+                        if not validation_passed:
+                            st.markdown(f'<div class="warning-box">{validation_message}</div>', unsafe_allow_html=True)
+                            return
+                        
+                        # Perform analysis
+                        movement_results = analyze_keyword_movement(df)
+                        
+                        # Display results
+                        display_movement_results(movement_results)
+                        
+                    except Exception as e:
+                        st.error(f"❌ Error processing file: {str(e)}")
+                        st.info("💡 Please ensure you've uploaded a valid Semrush Position Changes file")
+    else:
+        st.info("📤 Please upload a Semrush Position Changes file to begin analysis")
+
+def validate_movement_data(df):
+    """Validate the Position Changes data"""
+    required_columns = ['Keyword', 'Position', 'Previous position']
+    
+    # Find columns using flexible matching
+    kw_col = find_column(df.columns, ['keyword'])
+    pos_col = find_column(df.columns, ['position']) 
+    prev_pos_col = find_column(df.columns, ['previous position', 'prev position', 'previous'])
+    
+    missing_columns = []
+    if not kw_col:
+        missing_columns.append('Keyword')
+    if not pos_col:
+        missing_columns.append('Position')  
+    if not prev_pos_col:
+        missing_columns.append('Previous Position')
+    
+    if missing_columns:
+        return False, f"❌ Missing required columns: {missing_columns}. Available columns: {list(df.columns)[:10]}"
+    
+    # Check if data is not empty
+    if len(df) == 0:
+        return False, "❌ File appears to be empty"
+    
+    return True, "✅ Data validation passed"
+
+def analyze_keyword_movement(df):
+    """Analyze keyword movement patterns"""
+    
+    # Find and rename columns
+    kw_col = find_column(df.columns, ['keyword'])
+    pos_col = find_column(df.columns, ['position'])
+    prev_pos_col = find_column(df.columns, ['previous position', 'prev position', 'previous'])
+    url_col = find_column(df.columns, ['url', 'page', 'landing page'])
+    
+    # Prepare working dataframe
+    work_df = pd.DataFrame()
+    work_df['Keyword'] = df[kw_col].astype(str).str.strip()
+    work_df['Position'] = pd.to_numeric(df[pos_col], errors='coerce')
+    work_df['Previous_Position'] = pd.to_numeric(df[prev_pos_col], errors='coerce')
+    
+    if url_col:
+        work_df['URL'] = df[url_col].astype(str)
+    
+    # Remove rows with missing position data
+    work_df = work_df.dropna(subset=['Position', 'Previous_Position'])
+    
+    # Calculate movement (real numbers for tables)
+    work_df['Movement'] = work_df['Previous_Position'] - work_df['Position']  # positive = improved rank
+    
+    # Status classification treating 0 as "not ranked" (worst)
+    def effective_rank(series):
+        return np.where((series <= 0) | pd.isna(series), 1000, series)
+    
+    eff_prev = effective_rank(work_df['Previous_Position'])
+    eff_now = effective_rank(work_df['Position'])
+    status_movement = eff_prev - eff_now  # >0 improved, <0 declined, =0 unchanged
+    
+    work_df['Status'] = np.where(status_movement > 0, 'Improved',
+                        np.where(status_movement < 0, 'Declined', 'Unchanged'))
+    
+    # Movement distribution
+    counts = work_df['Status'].value_counts().reindex(['Improved', 'Declined', 'Unchanged']).fillna(0).astype(int)
+    improved, declined, unchanged = int(counts.get('Improved', 0)), int(counts.get('Declined', 0)), int(counts.get('Unchanged', 0))
+    ratio = (improved / declined) if declined > 0 else np.inf
+    
+    # Top improvers (exclude Position=0, prioritize #1)
+    improved_df = work_df[(work_df['Movement'] > 0) & (work_df['Position'] > 0)].copy()
+    improved_df['Reached_1'] = (improved_df['Position'] == 1).astype(int)
+    top_improvers = improved_df.sort_values(['Reached_1', 'Movement'], ascending=[False, False]).head(25)
+    
+    # Top decliners (exclude Previous_Position=0, keep drops to 0)
+    declined_df = work_df[(work_df['Movement'] < 0) & (work_df['Previous_Position'] > 0)].copy()
+    top_decliners = declined_df.sort_values('Movement', ascending=True).head(25)
+    
+    # Bucket analysis
+    def bucketize_position(series):
+        return pd.cut(series, bins=[-np.inf, 0, 3, 10, 20, np.inf], 
+                     labels=['Invalid', 'Top 1-3', '4-10', '11-20', '21+'], right=True)
+    
+    bucket_order = ['Top 1-3', '4-10', '11-20', '21+']
+    work_df['Prev_Bucket'] = bucketize_position(work_df['Previous_Position'])
+    work_df['Now_Bucket'] = bucketize_position(work_df['Position'])
+    
+    # Filter valid buckets for transition analysis
+    bucket_df = work_df[(work_df['Prev_Bucket'] != 'Invalid') & (work_df['Now_Bucket'] != 'Invalid')].copy()
+    
+    # Transition matrix
+    transition_matrix = pd.crosstab(bucket_df['Prev_Bucket'], bucket_df['Now_Bucket']).reindex(index=bucket_order, columns=bucket_order, fill_value=0)
+    
+    # Net flow analysis
+    diagonal = pd.Series({b: transition_matrix.at[b, b] if (b in transition_matrix.index and b in transition_matrix.columns) else 0 for b in bucket_order})
+    inflow = transition_matrix.sum(axis=0) - diagonal
+    outflow = transition_matrix.sum(axis=1) - diagonal
+    net_flow = inflow.reindex(bucket_order) - outflow.reindex(bucket_order)
+    
+    prev_counts = transition_matrix.sum(axis=1).reindex(bucket_order)
+    now_counts = transition_matrix.sum(axis=0).reindex(bucket_order)
+    delta_counts = now_counts - prev_counts
+    
+    # Sources of new Top 1-3
+    new_top3 = bucket_df[bucket_df['Now_Bucket'] == 'Top 1-3']
+    top3_sources = new_top3['Prev_Bucket'].value_counts().reindex(bucket_order, fill_value=0)
+    
+    return {
+        'total_keywords': len(work_df),
+        'movement_counts': {'improved': improved, 'declined': declined, 'unchanged': unchanged},
+        'ratio': ratio,
+        'top_improvers': top_improvers,
+        'top_decliners': top_decliners,
+        'transition_matrix': transition_matrix,
+        'bucket_flow': {
+            'prev_counts': prev_counts,
+            'now_counts': now_counts, 
+            'delta_counts': delta_counts,
+            'inflow': inflow.reindex(bucket_order),
+            'outflow': outflow.reindex(bucket_order),
+            'net_flow': net_flow
+        },
+        'top3_sources': top3_sources,
+        'raw_data': work_df
+    }
+
+def display_movement_results(results):
+    """Display keyword movement analysis results"""
+    
+    # Key metrics
+    st.markdown('<div class="section-header">📈 Movement Distribution Summary</div>', unsafe_allow_html=True)
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric(
+            label="Keywords Analyzed",
+            value=f"{results['total_keywords']:,}"
+        )
+    
+    with col2:
+        st.metric(
+            label="Improved Rankings",
+            value=f"{results['movement_counts']['improved']:,}",
+            delta=f"+{results['movement_counts']['improved']:,} keywords"
+        )
+    
+    with col3:
+        st.metric(
+            label="Declined Rankings", 
+            value=f"{results['movement_counts']['declined']:,}",
+            delta=f"-{results['movement_counts']['declined']:,} keywords",
+            delta_color="inverse"
+        )
+    
+    with col4:
+        ratio_display = f"{results['ratio']:.2f}" if results['ratio'] != np.inf else "∞"
+        st.metric(
+            label="Improved:Declined Ratio",
+            value=ratio_display,
+            help="Higher ratio indicates more keywords improving than declining"
+        )
+    
+    # Distribution chart
+    st.markdown('<div class="section-header">📊 Movement Distribution</div>', unsafe_allow_html=True)
+    
+    viz_col1, viz_col2 = st.columns(2)
+    
+    with viz_col1:
+        # Bar chart of movement distribution
+        dist_data = results['movement_counts']
+        fig_dist = go.Figure(data=[
+            go.Bar(x=list(dist_data.keys()), 
+                   y=list(dist_data.values()),
+                   marker_color=['#2ecc71', '#e74c3c', '#95a5a6'],
+                   text=list(dist_data.values()),
+                   textposition='auto'
+            )
+        ])
+        
+        fig_dist.update_layout(
+            title='Keyword Movement Distribution',
+            xaxis_title='Movement Type',
+            yaxis_title='Number of Keywords',
+            height=400
+        )
+        
+        st.plotly_chart(fig_dist, use_container_width=True)
+    
+    with viz_col2:
+        # Pie chart of movement share
+        labels = list(results['movement_counts'].keys())
+        values = list(results['movement_counts'].values())
+        
+        fig_pie = go.Figure(data=[go.Pie(
+            labels=labels,
+            values=values,
+            marker_colors=['#2ecc71', '#e74c3c', '#95a5a6']
+        )])
+        
+        fig_pie.update_layout(
+            title='Movement Distribution Share',
+            height=400
+        )
+        
+        st.plotly_chart(fig_pie, use_container_width=True)
+    
+    # Top winners and losers
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown('<div class="section-header">🏆 Top Improving Keywords</div>', unsafe_allow_html=True)
+        st.markdown("*Keywords with biggest positive movement (prioritizing new #1 rankings)*")
+        
+        if not results['top_improvers'].empty:
+            display_cols = ['Keyword', 'Previous_Position', 'Position', 'Movement']
+            if 'URL' in results['top_improvers'].columns:
+                display_cols.append('URL')
+            
+            improvers_display = results['top_improvers'][display_cols].head(15).copy()
+            improvers_display.columns = ['Keyword', 'Previous Pos', 'Current Pos', 'Movement'] + (['URL'] if 'URL' in display_cols else [])
+            st.dataframe(improvers_display, use_container_width=True, hide_index=True)
+        else:
+            st.info("No improving keywords found with the current criteria")
+    
+    with col2:
+        st.markdown('<div class="section-header">📉 Top Declining Keywords</div>', unsafe_allow_html=True)
+        st.markdown("*Keywords with biggest negative movement (excluding newly ranked keywords)*")
+        
+        if not results['top_decliners'].empty:
+            display_cols = ['Keyword', 'Previous_Position', 'Position', 'Movement']
+            if 'URL' in results['top_decliners'].columns:
+                display_cols.append('URL')
+            
+            decliners_display = results['top_decliners'][display_cols].head(15).copy()
+            decliners_display.columns = ['Keyword', 'Previous Pos', 'Current Pos', 'Movement'] + (['URL'] if 'URL' in display_cols else [])
+            st.dataframe(decliners_display, use_container_width=True, hide_index=True)
+        else:
+            st.info("No declining keywords found with the current criteria")
+    
+    # Bucket flow analysis
+    st.markdown('<div class="section-header">🔄 Ranking Bucket Flow Analysis</div>', unsafe_allow_html=True)
+    
+    # Transition matrix
+    st.markdown("**Transition Matrix - Previous Bucket → Current Bucket**")
+    st.dataframe(results['transition_matrix'], use_container_width=True)
+    
+    # Net flow table
+    st.markdown("**Net Movement by Ranking Bucket**")
+    flow_table = pd.DataFrame({
+        'Ranking Bucket': results['bucket_flow']['prev_counts'].index,
+        'Previous Count': results['bucket_flow']['prev_counts'].values,
+        'Current Count': results['bucket_flow']['now_counts'].values,
+        'Change': results['bucket_flow']['delta_counts'].values,
+        'Inflow': results['bucket_flow']['inflow'].values,
+        'Outflow': results['bucket_flow']['outflow'].values,
+        'Net Flow': results['bucket_flow']['net_flow'].values
+    })
+    
+    st.dataframe(flow_table, use_container_width=True, hide_index=True)
+    
+    # Sources of new top 3 rankings
+    if not results['top3_sources'].empty:
+        st.markdown("**Sources of New Top 1-3 Rankings**")
+        sources_df = pd.DataFrame({
+            'Previous Bucket': results['top3_sources'].index,
+            'Keywords Moved to Top 1-3': results['top3_sources'].values
+        })
+        st.dataframe(sources_df, use_container_width=True, hide_index=True)
+    
+    # Strategic insights
+    st.markdown('<div class="section-header">💡 Strategic Insights</div>', unsafe_allow_html=True)
+    insights = generate_movement_insights(results)
+    st.markdown(f'<div class="insight-box">{insights}</div>', unsafe_allow_html=True)
+    
+    # Download section
+    st.markdown('<div class="section-header">📥 Download Results</div>', unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        summary_report = create_movement_summary_report(results)
+        st.download_button(
+            label="📄 Download Movement Analysis Report",
+            data=summary_report,
+            file_name=f"keyword_movement_analysis_{datetime.now().strftime('%Y%m%d')}.txt",
+            mime="text/plain"
+        )
+    
+    with col2:
+        # Convert top movers to CSV
+        csv_buffer = io.StringIO()
+        combined_movers = pd.concat([
+            results['top_improvers'].head(15).assign(Type='Improver'),
+            results['top_decliners'].head(15).assign(Type='Decliner')
+        ])
+        combined_movers.to_csv(csv_buffer, index=False)
+        
+        st.download_button(
+            label="📊 Download Top Movers (CSV)",
+            data=csv_buffer.getvalue(),
+            file_name=f"keyword_top_movers_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv"
+        )
+
+def generate_movement_insights(results):
+    """Generate strategic insights from movement analysis"""
+    insights = []
+    
+    ratio = results['ratio']
+    improved = results['movement_counts']['improved']
+    declined = results['movement_counts']['declined']
+    
+    # Overall trend analysis
+    if ratio > 1.5:
+        insights.append(f"<b>🟢 Strong Upward Momentum:</b> With {improved:,} improving vs {declined:,} declining keywords (ratio: {ratio:.2f}), your overall keyword portfolio is strengthening significantly.")
+    elif ratio > 1.0:
+        insights.append(f"<b>🟢 Positive Trend:</b> More keywords improving ({improved:,}) than declining ({declined:,}), indicating healthy SEO momentum.")
+    elif ratio > 0.8:
+        insights.append(f"<b>🟡 Mixed Results:</b> Nearly balanced movement with {improved:,} improving vs {declined:,} declining. Focus on protecting top performers.")
+    else:
+        insights.append(f"<b>🔴 Declining Trend:</b> More keywords declining ({declined:,}) than improving ({improved:,}). Priority should be stabilizing rankings and identifying causes.")
+    
+    # Top 3 analysis
+    if not results['top3_sources'].empty:
+        top_source = results['top3_sources'].idxmax()
+        top_count = results['top3_sources'].max()
+        insights.append(f"<b>🎯 Top 3 Growth:</b> Most new top 3 rankings ({top_count}) came from the {top_source} bucket, showing your ability to push mid-performing keywords to elite positions.")
+    
+    # Bucket flow insights
+    flow = results['bucket_flow']
+    top3_net = flow['net_flow']['Top 1-3'] if 'Top 1-3' in flow['net_flow'].index else 0
+    tail_net = flow['net_flow']['21+'] if '21+' in flow['net_flow'].index else 0
+    
+    if top3_net > 0 and tail_net < 0:
+        insights.append("<b>🎯 Quality Consolidation:</b> You're successfully moving keywords from the long tail into top positions - a sign of content optimization working.")
+    elif top3_net < 0:
+        insights.append("<b>⚠️ Top Position Pressure:</b> You're losing some top 3 rankings. Review competitors and refresh your highest-value content.")
+    
+    # Actionable recommendations
+    if results['movement_counts']['declined'] > 0:
+        insights.append(f"<b>🔧 Action Items:</b> Review the {min(15, results['movement_counts']['declined'])} top declining keywords shown above. Look for content freshness, competitor analysis, and technical issues.")
+    
+    return "<br><br>".join(insights)
+
+def create_movement_summary_report(results):
+    """Create downloadable movement analysis report"""
+    
+    ratio_display = f"{results['ratio']:.2f}" if results['ratio'] != np.inf else "∞"
+    
+    report = f"""
+KEYWORD MOVEMENT ANALYSIS REPORT
+Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+===========================================
+EXECUTIVE SUMMARY
+===========================================
+
+Total Keywords Analyzed: {results['total_keywords']:,}
+
+Movement Distribution:
+• Improved Rankings: {results['movement_counts']['improved']:,} keywords
+• Declined Rankings: {results['movement_counts']['declined']:,} keywords  
+• Unchanged Rankings: {results['movement_counts']['unchanged']:,} keywords
+• Improved:Declined Ratio: {ratio_display}
+
+===========================================
+TOP IMPROVING KEYWORDS (Sample)
+===========================================
+
+"""
+    
+    if not results['top_improvers'].empty:
+        for _, row in results['top_improvers'].head(10).iterrows():
+            report += f"• {row['Keyword']} | {row['Previous_Position']} → {row['Position']} (+{row['Movement']:.0f})\n"
+    
+    report += f"""
+
+===========================================
+TOP DECLINING KEYWORDS (Sample)
+===========================================
+
+"""
+    
+    if not results['top_decliners'].empty:
+        for _, row in results['top_decliners'].head(10).iterrows():
+            report += f"• {row['Keyword']} | {row['Previous_Position']} → {row['Position']} ({row['Movement']:.0f})\n"
+    
+    report += f"""
+
+===========================================
+RANKING BUCKET FLOW ANALYSIS
+===========================================
+
+Bucket Changes:
+"""
+    
+    for bucket in results['bucket_flow']['prev_counts'].index:
+        prev_count = results['bucket_flow']['prev_counts'][bucket]
+        now_count = results['bucket_flow']['now_counts'][bucket] 
+        change = results['bucket_flow']['delta_counts'][bucket]
+        report += f"• {bucket}: {prev_count} → {now_count} ({change:+})\n"
+    
+    report += f"""
+
+===========================================
+STRATEGIC INSIGHTS
+===========================================
+
+{generate_movement_insights(results).replace('<b>', '').replace('</b>', '').replace('<br><br>', '\n\n').replace('🟢', '• ').replace('🟡', '• ').replace('🔴', '• ').replace('🎯', '• ').replace('⚠️', '• ').replace('🔧', '• ')}
+
+===========================================
+"""
+    
+    return report
 
 def page_performance_analysis():
     """Analyze page performance from Semrush Pages data"""
