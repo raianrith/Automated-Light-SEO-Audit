@@ -1687,6 +1687,19 @@ def analyze_gsc_page_performance(pages_df, countries_df):
     # Build working dataframe
     work_df = pd.DataFrame()
     work_df['Page'] = pages_df[page_col].astype(str).str.strip()
+    
+    # Normalize URLs to handle trailing slashes and case variations
+    def normalize_url(url):
+        if pd.isna(url) or url == '':
+            return url
+        url = str(url).strip()
+        # Remove trailing slash (but keep if it's just the domain)
+        if url.endswith('/') and url.count('/') > 2:
+            url = url.rstrip('/')
+        # Convert to lowercase for consistent comparison
+        return url.lower()
+    
+    work_df['Page_Normalized'] = work_df['Page'].apply(normalize_url)
     work_df['Clicks_Now'] = pd.to_numeric(pages_df[clicks_now_col], errors='coerce') if clicks_now_col else 0
     work_df['Clicks_Prev'] = pd.to_numeric(pages_df[clicks_prev_col], errors='coerce') if clicks_prev_col else 0
     work_df['Impr_Now'] = pd.to_numeric(pages_df[impr_now_col], errors='coerce') if impr_now_col else 0
@@ -1707,21 +1720,36 @@ def analyze_gsc_page_performance(pages_df, countries_df):
     else:
         work_df['Position'] = np.nan
     
-    # Calculate changes
-    work_df['Clicks_Delta'] = work_df['Clicks_Now'] - work_df['Clicks_Prev']
-    work_df['Impr_Delta'] = work_df['Impr_Now'] - work_df['Impr_Prev']
-    work_df['Clicks_Pct_Change'] = np.where(work_df['Clicks_Prev'] > 0, 
-                                           work_df['Clicks_Delta'] / work_df['Clicks_Prev'] * 100, 0)
-    
-    # Clean and sort
+    # Clean data
     work_df = work_df[work_df['Page'].notna() & work_df['Page'].ne('')].copy()
-    work_df = work_df.sort_values('Clicks_Now', ascending=False).reset_index(drop=True)
+    
+    # Aggregate duplicates by normalized URL (sum metrics, keep first URL for display)
+    agg_df = work_df.groupby('Page_Normalized').agg({
+        'Page': 'first',  # Keep first page URL for display
+        'Clicks_Now': 'sum',  # Sum clicks for duplicates
+        'Clicks_Prev': 'sum',  # Sum previous clicks
+        'Impr_Now': 'sum',  # Sum impressions
+        'Impr_Prev': 'sum',  # Sum previous impressions
+        'Position': 'mean'  # Average position for duplicates
+    }).reset_index()
+    
+    # Recalculate CTR after aggregation
+    agg_df['CTR_Now'] = np.where(agg_df['Impr_Now'] > 0, agg_df['Clicks_Now'] / agg_df['Impr_Now'] * 100, 0)
+    
+    # Calculate changes
+    agg_df['Clicks_Delta'] = agg_df['Clicks_Now'] - agg_df['Clicks_Prev']
+    agg_df['Impr_Delta'] = agg_df['Impr_Now'] - agg_df['Impr_Prev']
+    agg_df['Clicks_Pct_Change'] = np.where(agg_df['Clicks_Prev'] > 0, 
+                                           agg_df['Clicks_Delta'] / agg_df['Clicks_Prev'] * 100, 0)
+    
+    # Sort by current clicks
+    agg_df = agg_df.sort_values('Clicks_Now', ascending=False).reset_index(drop=True)
     
     # Top performers
-    top_pages_by_clicks = work_df.head(25)
-    top_ctr_pages = work_df[work_df['CTR_Now'] > 0].sort_values('CTR_Now', ascending=False).head(25)
-    biggest_gainers = work_df.sort_values('Clicks_Delta', ascending=False).head(20)
-    biggest_losers = work_df.sort_values('Clicks_Delta', ascending=True).head(20)
+    top_pages_by_clicks = agg_df.head(25)
+    top_ctr_pages = agg_df[agg_df['CTR_Now'] > 0].sort_values('CTR_Now', ascending=False).head(25)
+    biggest_gainers = agg_df.sort_values('Clicks_Delta', ascending=False).head(20)
+    biggest_losers = agg_df.sort_values('Clicks_Delta', ascending=True).head(20)
     
     # Countries analysis
     countries_analysis = None
@@ -1732,17 +1760,17 @@ def analyze_gsc_page_performance(pages_df, countries_df):
             countries_analysis = None
     
     return {
-        'total_pages': work_df['Page'].nunique(),  # Count distinct pages
-        'total_clicks_now': work_df['Clicks_Now'].sum(),
-        'total_clicks_prev': work_df['Clicks_Prev'].sum(),
-        'total_clicks_delta': work_df['Clicks_Delta'].sum(),
-        'avg_ctr': work_df['CTR_Now'].mean(),
+        'total_pages': len(agg_df),  # Now count distinct normalized URLs
+        'total_clicks_now': agg_df['Clicks_Now'].sum(),
+        'total_clicks_prev': agg_df['Clicks_Prev'].sum(),
+        'total_clicks_delta': agg_df['Clicks_Delta'].sum(),
+        'avg_ctr': agg_df['CTR_Now'].mean(),
         'top_pages_by_clicks': top_pages_by_clicks,
         'top_ctr_pages': top_ctr_pages,
         'biggest_gainers': biggest_gainers,
         'biggest_losers': biggest_losers,
         'countries_analysis': countries_analysis,
-        'raw_data': work_df
+        'raw_data': agg_df
     }
 
 def analyze_countries_data(countries_df):
@@ -2012,6 +2040,19 @@ def analyze_page_performance(df):
     # Build working dataframe
     work_df = pd.DataFrame()
     work_df['URL'] = df[url_col].astype(str).str.strip()
+    
+    # Normalize URLs to handle trailing slashes and case variations
+    def normalize_url(url):
+        if pd.isna(url) or url == '':
+            return url
+        url = str(url).strip()
+        # Remove trailing slash (but keep if it's just the domain)
+        if url.endswith('/') and url.count('/') > 2:
+            url = url.rstrip('/')
+        # Convert to lowercase for consistent comparison
+        return url.lower()
+    
+    work_df['URL_Normalized'] = work_df['URL'].apply(normalize_url)
     work_df['Traffic'] = pd.to_numeric(df[traffic_col].astype(str).str.replace(',', ''), errors='coerce')
     
     if traffic_pct_col:
@@ -2038,16 +2079,30 @@ def analyze_page_performance(df):
     
     # Clean data
     work_df = work_df[work_df['URL'].notna() & work_df['URL'].ne('') & work_df['Traffic'].notna()].copy()
-    work_df = work_df.sort_values('Traffic', ascending=False).reset_index(drop=True)
+    
+    # Aggregate duplicates by normalized URL (sum traffic, keep first URL for display)
+    agg_df = work_df.groupby('URL_Normalized').agg({
+        'URL': 'first',  # Keep first URL for display
+        'Traffic': 'sum',  # Sum traffic for duplicates
+        'Traffic_Pct': 'sum',  # Sum traffic percentage
+        'Keywords': 'sum' if 'Keywords' in work_df.columns else 'first'
+    }).reset_index()
+    
+    # Recalculate traffic percentage after aggregation
+    total_traffic = agg_df['Traffic'].sum()
+    agg_df['Traffic_Pct'] = (agg_df['Traffic'] / total_traffic * 100) if total_traffic > 0 else 0
+    
+    # Sort by traffic
+    agg_df = agg_df.sort_values('Traffic', ascending=False).reset_index(drop=True)
     
     # 1. Pareto Analysis
-    work_df['Cumulative_Pct'] = work_df['Traffic_Pct'].cumsum().clip(upper=100)
+    agg_df['Cumulative_Pct'] = agg_df['Traffic_Pct'].cumsum().clip(upper=100)
     
     def pages_to_threshold(threshold):
-        if work_df['Cumulative_Pct'].empty:
+        if agg_df['Cumulative_Pct'].empty:
             return np.nan
-        idx = np.argmax(work_df['Cumulative_Pct'].values >= threshold)
-        return int(idx + 1) if work_df['Cumulative_Pct'].iloc[-1] >= threshold else len(work_df)
+        idx = np.argmax(agg_df['Cumulative_Pct'].values >= threshold)
+        return int(idx + 1) if agg_df['Cumulative_Pct'].iloc[-1] >= threshold else len(agg_df)
     
     pareto_thresholds = {
         '50%': pages_to_threshold(50),
@@ -2057,8 +2112,8 @@ def analyze_page_performance(df):
     
     # 2. Efficiency Analysis (Traffic per Keyword)
     efficiency_df = pd.DataFrame()
-    if not work_df['Keywords'].isna().all():
-        eff_df = work_df[work_df['Keywords'] > 0].copy()
+    if not agg_df['Keywords'].isna().all():
+        eff_df = agg_df[agg_df['Keywords'] > 0].copy()
         min_keywords = max(5, int(np.median(eff_df['Keywords']))) if len(eff_df) > 0 else 5
         min_keywords = min(min_keywords, 20)  # Cap at 20 for broader analysis
         
@@ -2075,9 +2130,9 @@ def analyze_page_performance(df):
         except:
             return '/'
     
-    work_df['Directory'] = work_df['URL'].apply(extract_first_directory)
+    agg_df['Directory'] = agg_df['URL'].apply(extract_first_directory)
     
-    directory_analysis = (work_df.groupby('Directory')
+    directory_analysis = (agg_df.groupby('Directory')
                          .agg({
                              'Traffic': 'sum',
                              'URL': 'count',  # Page count
@@ -2092,8 +2147,8 @@ def analyze_page_performance(df):
     
     # 4. Long-tail Opportunities
     longtail_df = pd.DataFrame()
-    if not work_df['Keywords'].isna().all():
-        opp_df = work_df[work_df['Keywords'] > 0].copy()
+    if not agg_df['Keywords'].isna().all():
+        opp_df = agg_df[agg_df['Keywords'] > 0].copy()
         opp_df['TPK'] = (opp_df['Traffic'] / opp_df['Keywords']).replace([np.inf, -np.inf], np.nan)
         
         # High breadth (75th percentile keywords), low efficiency (25th percentile TPK)
@@ -2104,15 +2159,15 @@ def analyze_page_performance(df):
         longtail_df = longtail_df.sort_values(['Keywords', 'TPK'], ascending=[False, True])
     
     return {
-        'total_pages': work_df['URL'].nunique(),  # Count distinct URLs
-        'total_traffic': work_df['Traffic'].sum(),
-        'pareto_data': work_df[['URL', 'Traffic', 'Traffic_Pct', 'Cumulative_Pct']].copy(),
+        'total_pages': len(agg_df),  # Now count distinct normalized URLs
+        'total_traffic': agg_df['Traffic'].sum(),
+        'pareto_data': agg_df[['URL', 'Traffic', 'Traffic_Pct', 'Cumulative_Pct']].copy(),
         'pareto_thresholds': pareto_thresholds,
-        'top_pages': work_df.head(25),
+        'top_pages': agg_df.head(25),
         'efficiency_analysis': efficiency_df.head(25) if not efficiency_df.empty else pd.DataFrame(),
         'directory_analysis': directory_analysis.head(15),
         'longtail_opportunities': longtail_df.head(25) if not longtail_df.empty else pd.DataFrame(),
-        'raw_data': work_df
+        'raw_data': agg_df
     }
 
 def display_pages_results(results):
