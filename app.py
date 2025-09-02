@@ -1732,7 +1732,7 @@ def analyze_gsc_page_performance(pages_df, countries_df):
             countries_analysis = None
     
     return {
-        'total_pages': len(work_df),
+        'total_pages': work_df['Page'].nunique(),  # Count distinct pages
         'total_clicks_now': work_df['Clicks_Now'].sum(),
         'total_clicks_prev': work_df['Clicks_Prev'].sum(),
         'total_clicks_delta': work_df['Clicks_Delta'].sum(),
@@ -2104,7 +2104,7 @@ def analyze_page_performance(df):
         longtail_df = longtail_df.sort_values(['Keywords', 'TPK'], ascending=[False, True])
     
     return {
-        'total_pages': len(work_df),
+        'total_pages': work_df['URL'].nunique(),  # Count distinct URLs
         'total_traffic': work_df['Traffic'].sum(),
         'pareto_data': work_df[['URL', 'Traffic', 'Traffic_Pct', 'Cumulative_Pct']].copy(),
         'pareto_thresholds': pareto_thresholds,
