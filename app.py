@@ -1498,7 +1498,7 @@ def semrush_page_analysis():
             with st.spinner("🔄 Analyzing Semrush page performance..."):
                 try:
                     df = normalize_columns(read_uploaded_file(pages_file))
-                    validation_passed, validation_message = validate_pages_data(df)
+                    validation_passed, validation_message = validate_semrush_pages_data(df)
                     
                     if not validation_passed:
                         st.error(validation_message)
@@ -1512,6 +1512,28 @@ def semrush_page_analysis():
                     st.info("💡 Please ensure you've uploaded a valid Semrush Pages file")
     else:
         st.info("📤 Please upload a Semrush Pages file to begin analysis")
+
+def validate_semrush_pages_data(df):
+    """Validate the Semrush Pages data"""
+    
+    # Find columns using flexible matching
+    url_col = find_column(df.columns, ['url', 'page', 'landing page'])
+    traffic_col = find_column(df.columns, ['traffic'])
+    
+    missing_columns = []
+    if not url_col:
+        missing_columns.append('URL/Page')
+    if not traffic_col:
+        missing_columns.append('Traffic')
+    
+    if missing_columns:
+        return False, f"❌ Missing required columns: {missing_columns}. Available columns: {list(df.columns)[:10]}"
+    
+    # Check if data is not empty
+    if len(df) == 0:
+        return False, "❌ File appears to be empty"
+    
+    return True, "✅ Data validation passed"
 
 def gsc_page_analysis():
     """Google Search Console Pages Analysis"""
