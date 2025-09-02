@@ -92,7 +92,7 @@ def main():
         st.markdown("### 📚 How It Works")
         st.markdown("""
         1. **Choose** an analysis tab above
-        2. **Upload** required CSV files  
+        2. **Upload** required CSV/Excel files  
         3. **Review** automated insights
         4. **Download** your reports
         """)
@@ -101,53 +101,79 @@ def main():
         
         st.markdown("### 🔧 Data Sources")
         st.markdown("""
-        - **Semrush**: Keyword rankings & competition
-        - **Google Search Console**: Click & impression data
-        - **GA4**: Traffic & conversion metrics
+        - **Semrush**: Keyword rankings & competition data
+        - **Google Search Console**: Click & impression metrics
+        - **GA4**: Traffic & conversion analytics
         """)
         
         st.markdown("---")
         
-        st.markdown("### 💡 Tips")
+        st.markdown("### 💡 Pro Tips")
         st.markdown("""
-        - Use consistent date ranges across exports
-        - Download CSV format (not PDF)
-        - Validate file contents before uploading
+        - Export in **CSV or Excel format** (never PDF)
+        - Use **consistent date ranges** across all exports
+        - **Same month comparisons** for YoY analysis
+        - Check column headers match expectations
         """)
     
-    # Main content with tabs
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "🔍 Keyword Visibility Trends", 
-        "📈 Keyword Movement Analysis", 
-        "🏆 Top Pages Performance",
-        "⚡ More Coming Soon"
+    # Enhanced tab navigation with more sections
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+        "📊 Visibility Trends", 
+        "🔄 Keyword Movement", 
+        "📄 Page Performance",
+        "🎯 Query Analysis",
+        "🏁 Competitor Gaps",
+        "📈 Traffic Attribution", 
+        "🚧 More Soon"
     ])
     
     with tab1:
         keyword_visibility_analysis()
         
     with tab2:
-        st.info("🚧 Keyword Movement Distribution analysis coming next! This will show which keywords are improving vs declining with detailed winner/loser breakdowns.")
+        keyword_movement_analysis()
         
     with tab3:
-        st.info("🚧 Top Pages Performance analysis coming soon! This will identify your highest-value pages and optimization opportunities.")
+        page_performance_analysis()
         
     with tab4:
+        query_gains_losses_analysis()
+        
+    with tab5:
+        competitor_analysis()
+        
+    with tab6:
+        traffic_attribution_analysis()
+        
+    with tab7:
         st.markdown("""
-        ### 🚀 Upcoming Analysis Sections:
+        ### 🚀 Future Analysis Modules:
         
-        - **🎯 Query-Level Gains & Losses** - Identify which search terms are driving traffic changes
-        - **🏁 Competitor Benchmarking** - See how you stack up against search rivals  
-        - **📊 Traffic Attribution Analysis** - Connect SEO data to actual business metrics
-        - **🤖 SERP Features Impact** - Understand how AI Overviews and features affect CTR
-        - **🔧 Technical SEO Health** - Core Web Vitals and crawlability insights
-        - **📈 Conversion Optimization** - Landing page performance for organic traffic
+        **🤖 SERP Features Impact**
+        - AI Overviews presence & inclusion rates
+        - Featured snippets analysis
+        - SERP feature CTR impact
         
-        *Each section will include interactive charts, automated insights, and downloadable reports!*
+        **🔧 Technical SEO Health** 
+        - Core Web Vitals tracking
+        - Crawl error analysis
+        - Index coverage insights
+        
+        **📱 Mobile Performance**
+        - Mobile vs desktop rankings
+        - Mobile usability issues
+        - AMP performance analysis
+        
+        **🌍 Local SEO Analysis**
+        - Local pack rankings
+        - GMB performance metrics
+        - Local citation analysis
+        
+        *Each module will include interactive charts, automated insights, and actionable recommendations!*
         """)
         
         st.markdown("---")
-        st.markdown("**📧 Have suggestions or need a specific analysis? Let us know!**")
+        st.markdown("**💬 Have specific analysis needs? The framework is designed to be extensible!**")
 
 def keyword_visibility_analysis():
     st.markdown('<div class="section-header">🔍 Keyword Visibility Trends (Year-over-Year)</div>', unsafe_allow_html=True)
@@ -533,6 +559,175 @@ def generate_visibility_insights(results):
         insights.append("<b>🎯 Optimization Opportunity:</b> Over 40% of your keywords rank beyond position 20. Focus on improving on-page SEO and building topic authority.")
     
     return "<br><br>".join(insights)
+
+def keyword_movement_analysis():
+    """Analyze keyword movement distribution from Semrush Position Changes"""
+    st.markdown('<div class="section-header">🔄 Keyword Movement Distribution</div>', unsafe_allow_html=True)
+    
+    st.markdown("""
+    <div class="instruction-box">
+        <h4>📋 What This Section Analyzes:</h4>
+        <p>This analysis examines how your keyword rankings changed over time to identify:</p>
+        <ul>
+            <li><b>Movement distribution</b> - How many keywords improved, declined, or stayed unchanged</li>
+            <li><b>Top winners and losers</b> - Specific keywords with biggest ranking changes</li>
+            <li><b>Improved:Declined ratio</b> - Overall trend momentum</li>
+            <li><b>Ranking flow analysis</b> - Where keywords moved between ranking buckets</li>
+        </ul>
+        
+        <h4>📁 Required Files:</h4>
+        <p>You need <b>1 Semrush Position Changes file</b>:</p>
+        <ul>
+            <li><b>Position Changes export</b> from Semrush (last 12 months recommended)</li>
+        </ul>
+        
+        <h4>🎯 Key Insights You'll Get:</h4>
+        <ul>
+            <li>Movement distribution with improved:declined ratio</li>
+            <li>Top improving keywords (prioritizing #1 rankings)</li>
+            <li>Top declining keywords requiring attention</li>
+            <li>Ranking flow between position buckets</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.info("🚧 This section is coming next! Based on your Colab prototype's keyword movement analysis.")
+
+def page_performance_analysis():
+    """Analyze page performance from Semrush Pages data"""
+    st.markdown('<div class="section-header">📄 Page Performance Analysis</div>', unsafe_allow_html=True)
+    
+    st.markdown("""
+    <div class="instruction-box">
+        <h4>📋 What This Section Analyzes:</h4>
+        <p>This analysis examines your top-performing pages to understand:</p>
+        <ul>
+            <li><b>Traffic concentration</b> - How much traffic comes from your top pages (Pareto analysis)</li>
+            <li><b>Efficiency metrics</b> - Traffic per keyword to identify high-performing content</li>
+            <li><b>Directory clustering</b> - Which content hubs drive the most organic traffic</li>
+            <li><b>Long-tail opportunities</b> - Pages with many keywords but low efficiency</li>
+        </ul>
+        
+        <h4>📁 Required Files:</h4>
+        <p>You need <b>1 Semrush Pages file</b>:</p>
+        <ul>
+            <li><b>Pages export</b> from Semrush Organic Research (current period)</li>
+        </ul>
+        
+        <h4>🎯 Key Insights You'll Get:</h4>
+        <ul>
+            <li>Pages needed to reach 50%, 80%, 90% of traffic</li>
+            <li>Traffic efficiency leaderboard (traffic per keyword)</li>
+            <li>Content hub analysis by directory</li>
+            <li>Long-tail optimization opportunities</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.info("🚧 This section will include Pareto analysis, efficiency metrics, and directory clustering from your prototype!")
+
+def query_gains_losses_analysis():
+    """Analyze query-level gains and losses from GSC"""
+    st.markdown('<div class="section-header">🎯 Query Performance Analysis</div>', unsafe_allow_html=True)
+    
+    st.markdown("""
+    <div class="instruction-box">
+        <h4>📋 What This Section Analyzes:</h4>
+        <p>This analysis examines search query performance to identify:</p>
+        <ul>
+            <li><b>Top winning queries</b> - Search terms driving the most additional clicks</li>
+            <li><b>Top losing queries</b> - Search terms losing traffic that need attention</li>
+            <li><b>CTR vs impression changes</b> - Separate demand growth from execution issues</li>
+            <li><b>SERP feature impact</b> - Queries affected by rich snippets, AI overviews, etc.</li>
+        </ul>
+        
+        <h4>📁 Required Files:</h4>
+        <p>You need <b>1-2 files</b>:</p>
+        <ul>
+            <li><b>GSC Queries Compare</b> - Primary analysis file</li>
+            <li><b>Semrush Positions (current)</b> - Optional enrichment for position context</li>
+        </ul>
+        
+        <h4>🎯 Key Insights You'll Get:</h4>
+        <ul>
+            <li>Biggest query-level winners and losers</li>
+            <li>CTR pressure vs ranking wins identification</li>
+            <li>Charts showing top movers</li>
+            <li>Position-enriched analysis when available</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.info("🚧 This section will analyze GSC query data with your mixed charts + tables approach!")
+
+def competitor_analysis():
+    """Analyze competitor rankings and gaps"""
+    st.markdown('<div class="section-header">🏁 Competitor Gap Analysis</div>', unsafe_allow_html=True)
+    
+    st.markdown("""
+    <div class="instruction-box">
+        <h4>📋 What This Section Analyzes:</h4>
+        <p>This analysis examines your competitive landscape to understand:</p>
+        <ul>
+            <li><b>Top search competitors</b> - Domains most similar to yours in SERPs</li>
+            <li><b>Ranking gaps</b> - Keywords where competitors outrank you</li>
+            <li><b>Competitive pressure</b> - Which competitors affect your top losing queries</li>
+            <li><b>Gap opportunities</b> - Specific keywords to target for competitive gains</li>
+        </ul>
+        
+        <h4>📁 Required Files:</h4>
+        <p>You need <b>2+ files</b>:</p>
+        <ul>
+            <li><b>Semrush Competitors</b> - List of your top competitors</li>
+            <li><b>Your Positions (current)</b> - Your current keyword rankings</li>
+            <li><b>Competitor Positions</b> - Optional: competitor ranking data for detailed gaps</li>
+        </ul>
+        
+        <h4>🎯 Key Insights You'll Get:</h4>
+        <ul>
+            <li>Top competitors by relevance/overlap</li>
+            <li>Outrank counts for each competitor</li>
+            <li>Focus on losing queries where competitors beat you</li>
+            <li>Mini gap tables for specific opportunities</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.info("🚧 This section will show competitor outranking analysis with your gap table methodology!")
+
+def traffic_attribution_analysis():
+    """Analyze sitewide traffic attribution from GSC"""
+    st.markdown('<div class="section-header">📈 Traffic Attribution Analysis</div>', unsafe_allow_html=True)
+    
+    st.markdown("""
+    <div class="instruction-box">
+        <h4>📋 What This Section Analyzes:</h4>
+        <p>This analysis examines your overall organic performance to understand:</p>
+        <ul>
+            <li><b>Sitewide clicks & impressions</b> - Total organic performance YoY</li>
+            <li><b>CTR trends</b> - Whether click-through rates are improving</li>
+            <li><b>Position changes</b> - Average ranking movement impact</li>
+            <li><b>Demand vs execution</b> - Separate impression growth from CTR issues</li>
+        </ul>
+        
+        <h4>📁 Required Files:</h4>
+        <p>You need <b>1-2 files</b>:</p>
+        <ul>
+            <li><b>GSC Search Results Compare</b> - Sitewide performance comparison</li>
+            <li><b>GA4 Traffic Acquisition</b> - Optional: validate organic session impact</li>
+        </ul>
+        
+        <h4>🎯 Key Insights You'll Get:</h4>
+        <ul>
+            <li>Total clicks and impressions YoY changes</li>
+            <li>Weighted CTR and position analysis</li>
+            <li>Traffic pattern interpretation</li>
+            <li>Business impact validation</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.info("🚧 This section will analyze sitewide GSC performance with weighted metrics!")
 
 def create_visibility_summary_report(results):
     """Create a downloadable summary report"""
