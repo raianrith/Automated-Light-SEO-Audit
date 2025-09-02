@@ -1428,34 +1428,569 @@ def page_performance_analysis():
     """Analyze page performance from Semrush Pages data"""
     st.markdown('<div class="section-header">📄 Page Performance Analysis</div>', unsafe_allow_html=True)
     
-    st.markdown("""
-    <div class="instruction-box">
-        <h4>📋 What This Section Analyzes:</h4>
-        <p>This analysis examines your top-performing pages to understand:</p>
-        <ul>
-            <li><b>Traffic concentration</b> - How much traffic comes from your top pages (Pareto analysis)</li>
-            <li><b>Efficiency metrics</b> - Traffic per keyword to identify high-performing content</li>
-            <li><b>Directory clustering</b> - Which content hubs drive the most organic traffic</li>
-            <li><b>Long-tail opportunities</b> - Pages with many keywords but low efficiency</li>
-        </ul>
+    # Modern instruction design using containers and columns
+    with st.container():
+        st.markdown("### 📊 Analysis Overview")
         
-        <h4>📁 Required Files:</h4>
-        <p>You need <b>1 Semrush Pages file</b>:</p>
-        <ul>
-            <li><b>Pages export</b> from Semrush Organic Research (current period)</li>
-        </ul>
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.markdown("""
+            This analysis examines your top-performing pages to understand:
+            
+            **🎯 Key Questions Answered:**
+            - How concentrated is your organic traffic? (Pareto analysis)
+            - Which pages are most efficient at driving traffic per keyword?
+            - Where do your content hubs generate the most value?
+            - Which pages have untapped optimization potential?
+            """)
         
-        <h4>🎯 Key Insights You'll Get:</h4>
-        <ul>
-            <li>Pages needed to reach 50%, 80%, 90% of traffic</li>
-            <li>Traffic efficiency leaderboard (traffic per keyword)</li>
-            <li>Content hub analysis by directory</li>
-            <li>Long-tail optimization opportunities</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
+        with col2:
+            st.info("""
+            **💡 Strategic Value**
+            
+            Identifies your highest-value pages for protection and reveals optimization opportunities across your site.
+            """)
     
-    st.info("🚧 This section will include Pareto analysis, efficiency metrics, and directory clustering from your prototype!")
+    # File requirements in expandable section
+    with st.expander("📁 **File Requirements & Setup**", expanded=False):
+        st.markdown("""
+        **Required Files:** 1 Semrush Pages export
+        
+        | Setting | Requirement |
+        |---------|-------------|
+        | **Export From** | Organic Research → Pages |
+        | **Time Period** | Current month |
+        | **Format** | CSV or Excel |
+        | **Must Include** | URL, Traffic, Traffic %, Number of Keywords |
+        
+        **📋 Export Steps:**
+        1. Go to Domain Analytics → Organic Research → Pages
+        2. Set Date = current month
+        3. Click Export → CSV or Excel
+        4. Save as: client_semrush_pages_YYYY-MM.csv
+        """)
+    
+    # Key insights preview
+    st.markdown("### 🎯 Analysis Insights You'll Get")
+    
+    insight_col1, insight_col2, insight_col3, insight_col4 = st.columns(4)
+    
+    with insight_col1:
+        st.markdown("""
+        **📈 Traffic Concentration**
+        - Pareto curve analysis
+        - Pages to reach 50/80/90% traffic
+        """)
+    
+    with insight_col2:
+        st.markdown("""
+        **🏆 Efficiency Leaders**
+        - Traffic per keyword ratios
+        - High-performing content patterns
+        """)
+    
+    with insight_col3:
+        st.markdown("""
+        **🗂️ Content Hubs**
+        - Directory-level traffic analysis
+        - Hub performance insights
+        """)
+    
+    with insight_col4:
+        st.markdown("""
+        **🎯 Long-tail Opportunities**
+        - High breadth, low efficiency pages
+        - Internal linking opportunities
+        """)
+    
+    st.markdown("---")
+    
+    # File upload section
+    st.markdown("### 📤 Upload Your Data File")
+    
+    pages_file = st.file_uploader(
+        "Upload Semrush Pages file",
+        type=['csv', 'xlsx', 'xls'],
+        key="semrush_pages",
+        help="Export from Semrush: Organic Research → Pages (CSV or Excel format)"
+    )
+    
+    # Process file if uploaded
+    if pages_file is not None:
+        # Add Run Analysis button (centered)
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            run_pages_analysis = st.button("🚀 Run Page Analysis", key="run_pages", type="primary", use_container_width=True)
+        
+        # Display results outside column context for full width
+        if run_pages_analysis:
+            with st.spinner("🔄 Analyzing page performance..."):
+                try:
+                    # Load and validate data
+                    df = normalize_columns(read_uploaded_file(pages_file))
+                    
+                    # Validate required columns
+                    validation_passed, validation_message = validate_pages_data(df)
+                    
+                    if not validation_passed:
+                        st.error(validation_message)
+                        st.stop()
+                    
+                    # Perform analysis
+                    pages_results = analyze_page_performance(df)
+                    
+                    # Display results - FULL WIDTH
+                    display_pages_results(pages_results)
+                    
+                except Exception as e:
+                    st.error(f"❌ Error processing file: {str(e)}")
+                    st.info("💡 Please ensure you've uploaded a valid Semrush Pages file")
+    else:
+        st.info("📤 Please upload a Semrush Pages file to begin analysis")
+
+def validate_pages_data(df):
+    """Validate the Semrush Pages data"""
+    
+    # Find columns using flexible matching
+    url_col = find_column(df.columns, ['url', 'page', 'landing page'])
+    traffic_col = find_column(df.columns, ['traffic'])
+    
+    missing_columns = []
+    if not url_col:
+        missing_columns.append('URL/Page')
+    if not traffic_col:
+        missing_columns.append('Traffic')
+    
+    if missing_columns:
+        return False, f"❌ Missing required columns: {missing_columns}. Available columns: {list(df.columns)[:10]}"
+    
+    # Check if data is not empty
+    if len(df) == 0:
+        return False, "❌ File appears to be empty"
+    
+    return True, "✅ Data validation passed"
+
+def analyze_page_performance(df):
+    """Analyze page performance patterns following the prototype methodology"""
+    
+    # Find and rename columns
+    url_col = find_column(df.columns, ['url', 'page', 'landing page'])
+    
+    # Look for Traffic column (prefer exact match)
+    traffic_exact = [c for c in df.columns if c.lower().strip() == 'traffic']
+    traffic_col = traffic_exact[0] if traffic_exact else find_column(df.columns, ['traffic'])
+    
+    traffic_pct_col = find_column(df.columns, ['traffic %', 'traffic%', 'traffic (%)', 'share'])
+    keywords_col = find_column(df.columns, ['number of keywords', 'keywords', 'num. keywords', 'kws'])
+    
+    # Build working dataframe
+    work_df = pd.DataFrame()
+    work_df['URL'] = df[url_col].astype(str).str.strip()
+    work_df['Traffic'] = pd.to_numeric(df[traffic_col].astype(str).str.replace(',', ''), errors='coerce')
+    
+    if traffic_pct_col:
+        # Handle percentage formats
+        traffic_pct_series = df[traffic_pct_col]
+        if traffic_pct_series.astype(str).str.contains('%').any():
+            work_df['Traffic_Pct'] = pd.to_numeric(traffic_pct_series.astype(str).str.replace('%', ''), errors='coerce')
+        else:
+            pct_numeric = pd.to_numeric(traffic_pct_series, errors='coerce')
+            # If values are between 0-1, assume they're fractions, convert to percentages
+            if pct_numeric.max() <= 1.0:
+                work_df['Traffic_Pct'] = pct_numeric * 100
+            else:
+                work_df['Traffic_Pct'] = pct_numeric
+    else:
+        # Calculate traffic percentage if not provided
+        total_traffic = work_df['Traffic'].sum()
+        work_df['Traffic_Pct'] = (work_df['Traffic'] / total_traffic * 100) if total_traffic > 0 else 0
+    
+    if keywords_col:
+        work_df['Keywords'] = pd.to_numeric(df[keywords_col].astype(str).str.replace(',', ''), errors='coerce').fillna(0).astype(int)
+    else:
+        work_df['Keywords'] = np.nan
+    
+    # Clean data
+    work_df = work_df[work_df['URL'].notna() & work_df['URL'].ne('') & work_df['Traffic'].notna()].copy()
+    work_df = work_df.sort_values('Traffic', ascending=False).reset_index(drop=True)
+    
+    # 1. Pareto Analysis
+    work_df['Cumulative_Pct'] = work_df['Traffic_Pct'].cumsum().clip(upper=100)
+    
+    def pages_to_threshold(threshold):
+        if work_df['Cumulative_Pct'].empty:
+            return np.nan
+        idx = np.argmax(work_df['Cumulative_Pct'].values >= threshold)
+        return int(idx + 1) if work_df['Cumulative_Pct'].iloc[-1] >= threshold else len(work_df)
+    
+    pareto_thresholds = {
+        '50%': pages_to_threshold(50),
+        '80%': pages_to_threshold(80), 
+        '90%': pages_to_threshold(90)
+    }
+    
+    # 2. Efficiency Analysis (Traffic per Keyword)
+    efficiency_df = pd.DataFrame()
+    if not work_df['Keywords'].isna().all():
+        eff_df = work_df[work_df['Keywords'] > 0].copy()
+        min_keywords = max(5, int(np.median(eff_df['Keywords']))) if len(eff_df) > 0 else 5
+        min_keywords = min(min_keywords, 20)  # Cap at 20 for broader analysis
+        
+        eff_df = eff_df[eff_df['Keywords'] >= min_keywords].copy()
+        eff_df['TPK'] = (eff_df['Traffic'] / eff_df['Keywords']).round(2)
+        efficiency_df = eff_df.sort_values('TPK', ascending=False)
+    
+    # 3. Directory Analysis
+    def extract_first_directory(url):
+        try:
+            from urllib.parse import urlparse
+            path = urlparse(url).path.strip('/')
+            return ('/' + path.split('/')[0]) if path else '/'
+        except:
+            return '/'
+    
+    work_df['Directory'] = work_df['URL'].apply(extract_first_directory)
+    
+    directory_analysis = (work_df.groupby('Directory')
+                         .agg({
+                             'Traffic': 'sum',
+                             'URL': 'count',  # Page count
+                             'Keywords': 'sum'
+                         })
+                         .rename(columns={'URL': 'Pages'})
+                         .sort_values('Traffic', ascending=False)
+                         .reset_index())
+    
+    directory_analysis['Traffic_Pct'] = (directory_analysis['Traffic'] / directory_analysis['Traffic'].sum() * 100).round(2)
+    directory_analysis['Avg_Traffic_Per_Page'] = (directory_analysis['Traffic'] / directory_analysis['Pages']).round(2)
+    
+    # 4. Long-tail Opportunities
+    longtail_df = pd.DataFrame()
+    if not work_df['Keywords'].isna().all():
+        opp_df = work_df[work_df['Keywords'] > 0].copy()
+        opp_df['TPK'] = (opp_df['Traffic'] / opp_df['Keywords']).replace([np.inf, -np.inf], np.nan)
+        
+        # High breadth (75th percentile keywords), low efficiency (25th percentile TPK)
+        kw_threshold = opp_df['Keywords'].quantile(0.75)
+        tpk_threshold = opp_df['TPK'].quantile(0.25)
+        
+        longtail_df = opp_df[(opp_df['Keywords'] >= kw_threshold) & (opp_df['TPK'] <= tpk_threshold)].copy()
+        longtail_df = longtail_df.sort_values(['Keywords', 'TPK'], ascending=[False, True])
+    
+    return {
+        'total_pages': len(work_df),
+        'total_traffic': work_df['Traffic'].sum(),
+        'pareto_data': work_df[['URL', 'Traffic', 'Traffic_Pct', 'Cumulative_Pct']].copy(),
+        'pareto_thresholds': pareto_thresholds,
+        'top_pages': work_df.head(25),
+        'efficiency_analysis': efficiency_df.head(25) if not efficiency_df.empty else pd.DataFrame(),
+        'directory_analysis': directory_analysis.head(15),
+        'longtail_opportunities': longtail_df.head(25) if not longtail_df.empty else pd.DataFrame(),
+        'raw_data': work_df
+    }
+
+def display_pages_results(results):
+    """Display page performance analysis results"""
+    
+    # Key metrics
+    st.markdown('<div class="section-header">📈 Page Performance Summary</div>', unsafe_allow_html=True)
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric(
+            label="Total Pages",
+            value=f"{results['total_pages']:,}"
+        )
+    
+    with col2:
+        st.metric(
+            label="Total Traffic",
+            value=f"{results['total_traffic']:,.0f}",
+            help="Estimated monthly organic traffic"
+        )
+    
+    with col3:
+        pages_50 = results['pareto_thresholds']['50%']
+        concentration = (pages_50 / results['total_pages'] * 100) if pages_50 and results['total_pages'] > 0 else 0
+        st.metric(
+            label="Traffic Concentration",
+            value=f"{concentration:.1f}%",
+            help=f"{pages_50} pages drive 50% of traffic"
+        )
+    
+    with col4:
+        if not results['efficiency_analysis'].empty:
+            avg_tpk = results['efficiency_analysis']['TPK'].mean()
+            st.metric(
+                label="Avg TPK (Top Pages)",
+                value=f"{avg_tpk:.1f}",
+                help="Average Traffic per Keyword for efficient pages"
+            )
+        else:
+            st.metric(label="TPK Analysis", value="N/A", help="Keywords data not available")
+    
+    # Pareto Analysis
+    st.markdown('<div class="section-header">📊 Traffic Concentration (Pareto Analysis)</div>', unsafe_allow_html=True)
+    
+    # Pareto curve chart
+    pareto_data = results['pareto_data']
+    fig_pareto = go.Figure()
+    
+    fig_pareto.add_trace(go.Scatter(
+        x=list(range(1, len(pareto_data) + 1)),
+        y=pareto_data['Cumulative_Pct'].values,
+        mode='lines+markers',
+        name='Cumulative Traffic %',
+        line=dict(color='#3498db', width=3),
+        marker=dict(size=4)
+    ))
+    
+    # Add threshold lines
+    for threshold, pages_needed in results['pareto_thresholds'].items():
+        if pages_needed and not np.isnan(pages_needed):
+            fig_pareto.add_hline(y=int(threshold.replace('%', '')), 
+                                line_dash="dash", 
+                                line_color="red",
+                                annotation_text=f"{threshold} - {pages_needed} pages")
+    
+    fig_pareto.update_layout(
+        title=dict(text='Traffic Concentration Curve (Pareto Analysis)', font=dict(size=20)),
+        xaxis_title='Pages (Ranked by Traffic)',
+        yaxis_title='Cumulative Traffic Share (%)',
+        height=500,
+        margin=dict(l=60, r=60, t=80, b=60),
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        showlegend=False
+    )
+    
+    st.plotly_chart(fig_pareto, use_container_width=True, config={'displayModeBar': False})
+    
+    # Pareto summary table
+    pareto_summary = pd.DataFrame({
+        'Traffic Threshold': ['50% of traffic', '80% of traffic', '90% of traffic'],
+        'Pages Needed': [results['pareto_thresholds']['50%'], 
+                        results['pareto_thresholds']['80%'], 
+                        results['pareto_thresholds']['90%']]
+    })
+    st.dataframe(pareto_summary, use_container_width=True, hide_index=True)
+    
+    # Top Pages Analysis
+    st.markdown('<div class="section-header">🏆 Top Performing Pages</div>', unsafe_allow_html=True)
+    
+    # Show top pages with key metrics
+    top_pages_display = results['top_pages'][['URL', 'Traffic', 'Traffic_Pct']].copy()
+    if 'Keywords' in results['top_pages'].columns:
+        top_pages_display['Keywords'] = results['top_pages']['Keywords']
+    
+    top_pages_display.columns = ['URL', 'Traffic', 'Traffic %'] + (['Keywords'] if 'Keywords' in top_pages_display.columns else [])
+    st.dataframe(top_pages_display, use_container_width=True, hide_index=True, height=400)
+    
+    # Efficiency and Directory Analysis
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown('<div class="section-header">⚡ Efficiency Leaders (Traffic per Keyword)</div>', unsafe_allow_html=True)
+        
+        if not results['efficiency_analysis'].empty:
+            eff_display = results['efficiency_analysis'][['URL', 'Traffic', 'Keywords', 'TPK']].copy()
+            eff_display.columns = ['URL', 'Traffic', 'Keywords', 'TPK']
+            st.dataframe(eff_display, use_container_width=True, hide_index=True, height=350)
+            st.caption("*Pages with highest traffic per keyword - strong intent match signals*")
+        else:
+            st.info("Keywords data not available for efficiency analysis")
+    
+    with col2:
+        st.markdown('<div class="section-header">🗂️ Directory Performance</div>', unsafe_allow_html=True)
+        
+        dir_display = results['directory_analysis'][['Directory', 'Pages', 'Traffic', 'Traffic_Pct', 'Avg_Traffic_Per_Page']].copy()
+        dir_display.columns = ['Directory', 'Pages', 'Traffic', 'Traffic %', 'Avg/Page']
+        st.dataframe(dir_display, use_container_width=True, hide_index=True, height=350)
+        st.caption("*Traffic distribution by content directory/hub*")
+    
+    # Directory visualization
+    st.markdown('<div class="section-header">📊 Directory Traffic Distribution</div>', unsafe_allow_html=True)
+    
+    top_dirs = results['directory_analysis'].head(12)
+    fig_dirs = go.Figure(data=[
+        go.Bar(
+            y=top_dirs['Directory'],
+            x=top_dirs['Traffic'],
+            orientation='h',
+            marker_color='#3498db',
+            text=[f"{val:,.0f}" for val in top_dirs['Traffic']],
+            textposition='outside'
+        )
+    ])
+    
+    fig_dirs.update_layout(
+        title=dict(text='Top Directories by Traffic', font=dict(size=20)),
+        xaxis_title='Traffic',
+        yaxis_title='Directory',
+        height=500,
+        margin=dict(l=150, r=60, t=80, b=60),
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        yaxis=dict(autorange='reversed')  # Biggest at top
+    )
+    
+    st.plotly_chart(fig_dirs, use_container_width=True, config={'displayModeBar': False})
+    
+    # Long-tail Opportunities
+    if not results['longtail_opportunities'].empty:
+        st.markdown('<div class="section-header">🎯 Long-tail Optimization Opportunities</div>', unsafe_allow_html=True)
+        st.markdown("*Pages with many keywords but low traffic per keyword - candidates for internal links, schema, and intent expansion*")
+        
+        longtail_display = results['longtail_opportunities'][['URL', 'Traffic', 'Keywords', 'TPK']].copy()
+        longtail_display.columns = ['URL', 'Traffic', 'Keywords', 'TPK']
+        st.dataframe(longtail_display, use_container_width=True, hide_index=True, height=400)
+    
+    # Strategic insights
+    st.markdown('<div class="section-header">💡 Strategic Insights</div>', unsafe_allow_html=True)
+    insights = generate_pages_insights(results)
+    st.markdown(f'<div class="insight-box">{insights}</div>', unsafe_allow_html=True)
+    
+    # Download section
+    st.markdown('<div class="section-header">📥 Download Results</div>', unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        summary_report = create_pages_summary_report(results)
+        st.download_button(
+            label="📄 Download Page Analysis Report",
+            data=summary_report,
+            file_name=f"page_performance_analysis_{datetime.now().strftime('%Y%m%d')}.txt",
+            mime="text/plain"
+        )
+    
+    with col2:
+        # Convert analysis to CSV
+        csv_buffer = io.StringIO()
+        results['raw_data'].to_csv(csv_buffer, index=False)
+        
+        st.download_button(
+            label="📊 Download Full Data (CSV)",
+            data=csv_buffer.getvalue(),
+            file_name=f"page_performance_data_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv"
+        )
+
+def generate_pages_insights(results):
+    """Generate strategic insights from page performance analysis"""
+    insights = []
+    
+    # Traffic concentration analysis
+    pages_50 = results['pareto_thresholds']['50%']
+    pages_80 = results['pareto_thresholds']['80%']
+    total_pages = results['total_pages']
+    
+    concentration_50 = (pages_50 / total_pages * 100) if pages_50 and total_pages > 0 else 0
+    
+    if concentration_50 < 5:
+        insights.append(f"<b>🟢 Excellent Traffic Distribution:</b> Only {pages_50} pages ({concentration_50:.1f}%) drive 50% of traffic - very concentrated and efficient.")
+    elif concentration_50 < 15:
+        insights.append(f"<b>🟢 Good Concentration:</b> {pages_50} pages ({concentration_50:.1f}%) drive 50% of traffic - healthy focus on high-value content.")
+    else:
+        insights.append(f"<b>🟡 Distributed Traffic:</b> {pages_50} pages ({concentration_50:.1f}%) needed for 50% of traffic - consider strengthening top performers.")
+    
+    # Efficiency insights
+    if not results['efficiency_analysis'].empty:
+        top_tpk = results['efficiency_analysis']['TPK'].iloc[0] if len(results['efficiency_analysis']) > 0 else 0
+        insights.append(f"<b>⚡ Top Efficiency:</b> Your most efficient page generates {top_tpk:.1f} traffic per keyword - analyze and replicate this content pattern.")
+    
+    # Directory insights
+    if not results['directory_analysis'].empty:
+        top_dir = results['directory_analysis'].iloc[0]
+        dir_concentration = top_dir['Traffic_Pct']
+        insights.append(f"<b>🗂️ Content Hub Leader:</b> The '{top_dir['Directory']}' directory drives {dir_concentration:.1f}% of traffic from {top_dir['Pages']} pages.")
+    
+    # Long-tail insights
+    if not results['longtail_opportunities'].empty:
+        longtail_count = len(results['longtail_opportunities'])
+        insights.append(f"<b>🎯 Optimization Potential:</b> {longtail_count} pages have high keyword counts but low efficiency - prime candidates for internal linking and content enhancement.")
+    
+    # Risk assessment
+    if concentration_50 < 10:
+        insights.append("<b>⚠️ Concentration Risk:</b> Heavy reliance on few pages - diversify traffic sources and defend top performers against competitive threats.")
+    
+    return "<br><br>".join(insights)
+
+def create_pages_summary_report(results):
+    """Create downloadable page performance report"""
+    
+    report = f"""
+PAGE PERFORMANCE ANALYSIS REPORT
+Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+===========================================
+EXECUTIVE SUMMARY
+===========================================
+
+Total Pages Analyzed: {results['total_pages']:,}
+Total Estimated Traffic: {results['total_traffic']:,.0f}
+
+Traffic Concentration (Pareto Analysis):
+• 50% of traffic: {results['pareto_thresholds']['50%']} pages
+• 80% of traffic: {results['pareto_thresholds']['80%']} pages  
+• 90% of traffic: {results['pareto_thresholds']['90%']} pages
+
+===========================================
+TOP PERFORMING PAGES (Traffic Leaders)
+===========================================
+
+"""
+    
+    for _, row in results['top_pages'].head(15).iterrows():
+        keywords_info = f" | {row['Keywords']:.0f} keywords" if 'Keywords' in row and pd.notna(row['Keywords']) else ""
+        report += f"• {row['URL']} | {row['Traffic']:.0f} traffic ({row['Traffic_Pct']:.1f}%){keywords_info}\n"
+    
+    if not results['efficiency_analysis'].empty:
+        report += f"""
+
+===========================================
+EFFICIENCY LEADERS (Traffic per Keyword)
+===========================================
+
+"""
+        for _, row in results['efficiency_analysis'].head(10).iterrows():
+            report += f"• {row['URL']} | TPK: {row['TPK']:.1f} ({row['Traffic']:.0f} traffic / {row['Keywords']:.0f} keywords)\n"
+    
+    report += f"""
+
+===========================================
+CONTENT HUB ANALYSIS (Directory Performance)  
+===========================================
+
+"""
+    
+    for _, row in results['directory_analysis'].head(10).iterrows():
+        report += f"• {row['Directory']} | {row['Traffic']:.0f} traffic ({row['Traffic_Pct']:.1f}%) from {row['Pages']} pages\n"
+    
+    if not results['longtail_opportunities'].empty:
+        report += f"""
+
+===========================================
+LONG-TAIL OPTIMIZATION OPPORTUNITIES
+===========================================
+
+"""
+        for _, row in results['longtail_opportunities'].head(10).iterrows():
+            report += f"• {row['URL']} | {row['Keywords']:.0f} keywords, TPK: {row['TPK']:.1f}\n"
+    
+    report += f"""
+
+===========================================
+STRATEGIC INSIGHTS
+===========================================
+
+{generate_pages_insights(results).replace('<b>', '').replace('</b>', '').replace('<br><br>', '\n\n').replace('🟢', '• ').replace('🟡', '• ').replace('⚡', '• ').replace('🗂️', '• ').replace('🎯', '• ').replace('⚠️', '• ')}
+
+===========================================
+"""
+    
+    return report
 
 def query_gains_losses_analysis():
     """Analyze query-level gains and losses from GSC"""
