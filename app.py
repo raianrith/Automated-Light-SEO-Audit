@@ -446,59 +446,73 @@ def display_visibility_results(results):
     # Visualization section
     st.markdown('<div class="section-header">📊 Ranking Distribution Analysis</div>', unsafe_allow_html=True)
     
-    viz_col1, viz_col2 = st.columns(2)
+    # Prepare data for charts
+    bucket_labels = ['Top 3', '4-10', '11-20', '21+']
+    current_values = [results['bucket_changes'][k]['current'] for k in ['top_3', 'top_4_10', 'top_11_20', 'top_21_plus']]
+    previous_values = [results['bucket_changes'][k]['previous'] for k in ['top_3', 'top_4_10', 'top_11_20', 'top_21_plus']]
     
-    with viz_col1:
-        # Ranking distribution comparison chart
-        bucket_labels = ['Top 3', '4-10', '11-20', '21+']
-        current_values = [results['bucket_changes'][k]['current'] for k in ['top_3', 'top_4_10', 'top_11_20', 'top_21_plus']]
-        previous_values = [results['bucket_changes'][k]['previous'] for k in ['top_3', 'top_4_10', 'top_11_20', 'top_21_plus']]
-        
-        fig_distribution = go.Figure(data=[
-            go.Bar(name='Previous Period', x=bucket_labels, y=previous_values, marker_color='lightblue'),
-            go.Bar(name='Current Period', x=bucket_labels, y=current_values, marker_color='darkblue')
-        ])
-        
-        fig_distribution.update_layout(
-            title='Keyword Count by Ranking Position',
-            xaxis_title='Ranking Position',
-            yaxis_title='Number of Keywords',
-            barmode='group',
-            height=400
-        )
-        
-        st.plotly_chart(fig_distribution, use_container_width=True)
+    # Full width charts - stacked vertically for better space usage
+    # First chart - ranking distribution comparison
+    fig_distribution = go.Figure(data=[
+        go.Bar(name='Previous Period', x=bucket_labels, y=previous_values, 
+               marker_color='lightblue', text=[f"{val:,}" for val in previous_values],
+               textposition='auto', textfont=dict(size=12)),
+        go.Bar(name='Current Period', x=bucket_labels, y=current_values, 
+               marker_color='darkblue', text=[f"{val:,}" for val in current_values],
+               textposition='auto', textfont=dict(size=12))
+    ])
     
-    with viz_col2:
-        # Share distribution pie charts
-        fig_pie = make_subplots(
-            rows=1, cols=2, 
-            specs=[[{'type':'domain'}, {'type':'domain'}]],
-            subplot_titles=('Previous Period', 'Current Period')
-        )
-        
-        # Previous period pie
-        fig_pie.add_trace(go.Pie(
-            labels=bucket_labels,
-            values=previous_values,
-            name="Previous",
-            marker_colors=['#ff9999', '#66b3ff', '#99ff99', '#ffcc99']
-        ), 1, 1)
-        
-        # Current period pie
-        fig_pie.add_trace(go.Pie(
-            labels=bucket_labels,
-            values=current_values,
-            name="Current",
-            marker_colors=['#ff6666', '#3399ff', '#66ff66', '#ffb366']
-        ), 1, 2)
-        
-        fig_pie.update_layout(
-            title_text="Ranking Distribution Share",
-            height=400
-        )
-        
-        st.plotly_chart(fig_pie, use_container_width=True)
+    fig_distribution.update_layout(
+        title=dict(text='Keyword Count by Ranking Position', font=dict(size=20)),
+        xaxis_title='Ranking Position',
+        yaxis_title='Number of Keywords',
+        barmode='group',
+        height=500,
+        margin=dict(l=60, r=60, t=80, b=60),
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        xaxis=dict(tickfont=dict(size=14)),
+        yaxis=dict(tickfont=dict(size=14))
+    )
+    
+    st.plotly_chart(fig_distribution, use_container_width=True, config={'displayModeBar': False})
+    
+    # Second chart - share distribution comparison (side by side pie charts)
+    fig_pie = make_subplots(
+        rows=1, cols=2, 
+        specs=[[{'type':'domain'}, {'type':'domain'}]],
+        subplot_titles=('Previous Period Share', 'Current Period Share')
+    )
+    
+    # Previous period pie
+    fig_pie.add_trace(go.Pie(
+        labels=bucket_labels,
+        values=previous_values,
+        name="Previous",
+        marker_colors=['#ff9999', '#66b3ff', '#99ff99', '#ffcc99'],
+        textinfo='label+percent',
+        textfont=dict(size=12)
+    ), 1, 1)
+    
+    # Current period pie
+    fig_pie.add_trace(go.Pie(
+        labels=bucket_labels,
+        values=current_values,
+        name="Current",
+        marker_colors=['#ff6666', '#3399ff', '#66ff66', '#ffb366'],
+        textinfo='label+percent',
+        textfont=dict(size=12)
+    ), 1, 2)
+    
+    fig_pie.update_layout(
+        title=dict(text="Ranking Distribution Share Comparison", font=dict(size=20)),
+        height=500,
+        margin=dict(l=60, r=60, t=100, b=60),
+        paper_bgcolor='rgba(0,0,0,0)'
+    )
+    
+    st.plotly_chart(fig_pie, use_container_width=True, config={'displayModeBar': False})
     
     # Detailed changes table
     st.markdown('<div class="section-header">📋 Detailed Changes by Ranking Bucket</div>', unsafe_allow_html=True)
@@ -1071,52 +1085,63 @@ def display_movement_results(results):
     # Distribution chart
     st.markdown('<div class="section-header">📊 Movement Distribution</div>', unsafe_allow_html=True)
     
-    viz_col1, viz_col2 = st.columns(2)
-    
-    with viz_col1:
-        # Bar chart of movement distribution
-        dist_data = results['movement_counts']
-        fig_dist = go.Figure(data=[
-            go.Bar(x=list(dist_data.keys()), 
-                   y=list(dist_data.values()),
-                   marker_color=['#2ecc71', '#e74c3c', '#95a5a6'],
-                   text=list(dist_data.values()),
-                   textposition='auto'
-            )
-        ])
-        
-        fig_dist.update_layout(
-            title='Keyword Movement Distribution',
-            xaxis_title='Movement Type',
-            yaxis_title='Number of Keywords',
-            height=400
+    # Full-width bar chart
+    dist_data = results['movement_counts']
+    fig_dist = go.Figure(data=[
+        go.Bar(x=list(dist_data.keys()), 
+               y=list(dist_data.values()),
+               marker_color=['#2ecc71', '#e74c3c', '#95a5a6'],
+               text=[f"{val:,}" for val in dist_data.values()],
+               textposition='auto',
+               textfont=dict(size=16, color='white')
         )
-        
-        st.plotly_chart(fig_dist, use_container_width=True)
+    ])
     
-    with viz_col2:
-        # Pie chart of movement share
-        labels = list(results['movement_counts'].keys())
-        values = list(results['movement_counts'].values())
-        
-        fig_pie = go.Figure(data=[go.Pie(
-            labels=labels,
-            values=values,
-            marker_colors=['#2ecc71', '#e74c3c', '#95a5a6']
-        )])
-        
-        fig_pie.update_layout(
-            title='Movement Distribution Share',
-            height=400
-        )
-        
-        st.plotly_chart(fig_pie, use_container_width=True)
+    fig_dist.update_layout(
+        title=dict(text='Keyword Movement Distribution', font=dict(size=20)),
+        xaxis_title='Movement Type',
+        yaxis_title='Number of Keywords',
+        height=500,
+        margin=dict(l=60, r=60, t=80, b=60),
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        xaxis=dict(tickfont=dict(size=14)),
+        yaxis=dict(tickfont=dict(size=14))
+    )
     
-    # Top winners and losers
-    col1, col2 = st.columns(2)
+    st.plotly_chart(fig_dist, use_container_width=True, config={'displayModeBar': False})
     
-    with col1:
-        st.markdown('<div class="section-header">🏆 Top Improving Keywords</div>', unsafe_allow_html=True)
+    # Full-width pie chart 
+    labels = list(results['movement_counts'].keys())
+    values = list(results['movement_counts'].values())
+    
+    fig_pie = go.Figure(data=[go.Pie(
+        labels=labels,
+        values=values,
+        marker_colors=['#2ecc71', '#e74c3c', '#95a5a6'],
+        textinfo='label+percent+value',
+        textfont=dict(size=14),
+        pull=[0.05, 0.05, 0],
+        hole=0.3
+    )])
+    
+    fig_pie.update_layout(
+        title=dict(text='Movement Distribution Share', font=dict(size=20)),
+        height=500,
+        margin=dict(l=60, r=60, t=80, b=60),
+        paper_bgcolor='rgba(0,0,0,0)',
+        annotations=[dict(text=f'Total<br>{sum(values):,}', x=0.5, y=0.5, font_size=16, showarrow=False)]
+    )
+    
+    st.plotly_chart(fig_pie, use_container_width=True, config={'displayModeBar': False})
+    
+    # Top winners and losers - full width layout
+    st.markdown('<div class="section-header">🏆 Top Moving Keywords</div>', unsafe_allow_html=True)
+    
+    # Use tabs for winners/losers to save vertical space and improve readability
+    winner_tab, loser_tab = st.tabs(["📈 Top Improving Keywords", "📉 Top Declining Keywords"])
+    
+    with winner_tab:
         st.markdown("*Keywords with biggest positive movement (prioritizing new #1 rankings)*")
         
         if not results['top_improvers'].empty:
@@ -1124,14 +1149,13 @@ def display_movement_results(results):
             if 'URL' in results['top_improvers'].columns:
                 display_cols.append('URL')
             
-            improvers_display = results['top_improvers'][display_cols].head(15).copy()
+            improvers_display = results['top_improvers'][display_cols].head(20).copy()
             improvers_display.columns = ['Keyword', 'Previous Pos', 'Current Pos', 'Movement'] + (['URL'] if 'URL' in display_cols else [])
-            st.dataframe(improvers_display, use_container_width=True, hide_index=True)
+            st.dataframe(improvers_display, use_container_width=True, hide_index=True, height=400)
         else:
             st.info("No improving keywords found with the current criteria")
     
-    with col2:
-        st.markdown('<div class="section-header">📉 Top Declining Keywords</div>', unsafe_allow_html=True)
+    with loser_tab:
         st.markdown("*Keywords with biggest negative movement (excluding newly ranked keywords)*")
         
         if not results['top_decliners'].empty:
@@ -1139,9 +1163,9 @@ def display_movement_results(results):
             if 'URL' in results['top_decliners'].columns:
                 display_cols.append('URL')
             
-            decliners_display = results['top_decliners'][display_cols].head(15).copy()
+            decliners_display = results['top_decliners'][display_cols].head(20).copy()
             decliners_display.columns = ['Keyword', 'Previous Pos', 'Current Pos', 'Movement'] + (['URL'] if 'URL' in display_cols else [])
-            st.dataframe(decliners_display, use_container_width=True, hide_index=True)
+            st.dataframe(decliners_display, use_container_width=True, hide_index=True, height=400)
         else:
             st.info("No declining keywords found with the current criteria")
     
