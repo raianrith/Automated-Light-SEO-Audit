@@ -87,26 +87,67 @@ def main():
     # Main header
     st.markdown('<div class="main-header">🚀 SEO Performance Analyzer</div>', unsafe_allow_html=True)
     
-    # Sidebar navigation
+    # Sidebar guide
     with st.sidebar:
-        st.markdown("## 📊 Analysis Sections")
-        selected_section = st.selectbox(
-            "Choose Analysis Type:",
-            ["🔍 Keyword Visibility Trends (YoY)", "🚧 More Sections Coming Soon..."],
-            index=0
-        )
+        st.markdown("### 📚 How It Works")
+        st.markdown("""
+        1. **Choose** an analysis tab above
+        2. **Upload** required CSV files  
+        3. **Review** automated insights
+        4. **Download** your reports
+        """)
         
         st.markdown("---")
-        st.markdown("### 📚 Quick Guide")
+        
+        st.markdown("### 🔧 Data Sources")
         st.markdown("""
-        1. **Select** an analysis section
-        2. **Upload** required CSV files
-        3. **Review** automated insights
-        4. **Download** reports
+        - **Semrush**: Keyword rankings & competition
+        - **Google Search Console**: Click & impression data
+        - **GA4**: Traffic & conversion metrics
+        """)
+        
+        st.markdown("---")
+        
+        st.markdown("### 💡 Tips")
+        st.markdown("""
+        - Use consistent date ranges across exports
+        - Download CSV format (not PDF)
+        - Validate file contents before uploading
         """)
     
-    if "🔍 Keyword Visibility Trends" in selected_section:
+    # Main content with tabs
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "🔍 Keyword Visibility Trends", 
+        "📈 Keyword Movement Analysis", 
+        "🏆 Top Pages Performance",
+        "⚡ More Coming Soon"
+    ])
+    
+    with tab1:
         keyword_visibility_analysis()
+        
+    with tab2:
+        st.info("🚧 Keyword Movement Distribution analysis coming next! This will show which keywords are improving vs declining with detailed winner/loser breakdowns.")
+        
+    with tab3:
+        st.info("🚧 Top Pages Performance analysis coming soon! This will identify your highest-value pages and optimization opportunities.")
+        
+    with tab4:
+        st.markdown("""
+        ### 🚀 Upcoming Analysis Sections:
+        
+        - **🎯 Query-Level Gains & Losses** - Identify which search terms are driving traffic changes
+        - **🏁 Competitor Benchmarking** - See how you stack up against search rivals  
+        - **📊 Traffic Attribution Analysis** - Connect SEO data to actual business metrics
+        - **🤖 SERP Features Impact** - Understand how AI Overviews and features affect CTR
+        - **🔧 Technical SEO Health** - Core Web Vitals and crawlability insights
+        - **📈 Conversion Optimization** - Landing page performance for organic traffic
+        
+        *Each section will include interactive charts, automated insights, and downloadable reports!*
+        """)
+        
+        st.markdown("---")
+        st.markdown("**📧 Have suggestions or need a specific analysis? Let us know!**")
 
 def keyword_visibility_analysis():
     st.markdown('<div class="section-header">🔍 Keyword Visibility Trends (Year-over-Year)</div>', unsafe_allow_html=True)
