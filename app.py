@@ -1815,12 +1815,11 @@ def display_gsc_results(results):
         )
     
     with col2:
-        delta_color = "normal" if results['total_clicks_delta'] >= 0 else "inverse"
         st.metric(
             label="Total Clicks Change",
             value=f"{results['total_clicks_delta']:,}",
             delta=f"{((results['total_clicks_delta'] / results['total_clicks_prev']) * 100) if results['total_clicks_prev'] > 0 else 0:+.1f}%",
-            delta_color=delta_color
+            delta_color="normal"  # Always use normal: green=good/increase, red=bad/decrease
         )
     
     with col3:
