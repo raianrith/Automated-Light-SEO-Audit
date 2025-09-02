@@ -3035,36 +3035,614 @@ def competitor_analysis():
     """Analyze competitor rankings and gaps"""
     st.markdown('<div class="section-header">🏁 Competitor Gap Analysis</div>', unsafe_allow_html=True)
     
-    st.markdown("""
-    <div class="instruction-box">
-        <h4>📋 What This Section Analyzes:</h4>
-        <p>This analysis examines your competitive landscape to understand:</p>
-        <ul>
-            <li><b>Top search competitors</b> - Domains most similar to yours in SERPs</li>
-            <li><b>Ranking gaps</b> - Keywords where competitors outrank you</li>
-            <li><b>Competitive pressure</b> - Which competitors affect your top losing queries</li>
-            <li><b>Gap opportunities</b> - Specific keywords to target for competitive gains</li>
-        </ul>
+    # Modern instruction design
+    with st.container():
+        st.markdown("### 📊 Analysis Overview")
         
-        <h4>📁 Required Files:</h4>
-        <p>You need <b>2+ files</b>:</p>
-        <ul>
-            <li><b>Semrush Competitors</b> - List of your top competitors</li>
-            <li><b>Your Positions (current)</b> - Your current keyword rankings</li>
-            <li><b>Competitor Positions</b> - Optional: competitor ranking data for detailed gaps</li>
-        </ul>
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.markdown("""
+            This analysis examines your competitive landscape to understand:
+            
+            **🎯 Key Questions Answered:**
+            - Who are your real search competitors (not just business rivals)?
+            - Where do competitors consistently outrank you?
+            - Which of your declining keywords show competitive pressure?
+            - What specific keyword gaps present opportunities?
+            """)
         
-        <h4>🎯 Key Insights You'll Get:</h4>
-        <ul>
-            <li>Top competitors by relevance/overlap</li>
-            <li>Outrank counts for each competitor</li>
-            <li>Focus on losing queries where competitors beat you</li>
-            <li>Mini gap tables for specific opportunities</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
+        with col2:
+            st.info("""
+            **💡 Strategic Value**
+            
+            Identifies the domains shaping your SERPs and reveals specific keyword opportunities to target.
+            """)
     
-    st.info("🚧 This section will show competitor outranking analysis with your gap table methodology!")
+    # File requirements in expandable section
+    with st.expander("📁 **File Requirements & Setup**", expanded=False):
+        st.markdown("""
+        **Required Files:** 2 files minimum, 3+ for detailed analysis
+        
+        | File | Purpose | Export From |
+        |------|---------|-------------|
+        | **Semrush Competitors** | Identify top competitors | Organic Research → Competitors |
+        | **Your Positions (current)** | Your current rankings | Organic Research → Positions |
+        | **Competitor Positions** | Optional: Detailed gaps | Individual competitor Position exports |
+        
+        **📋 Export Steps:**
+        1. **Competitors**: Export from Competitors tab (shows relevance & overlap)
+        2. **Your Positions**: Current month positions export  
+        3. **Optional**: Export positions for top 3-5 competitors individually
+        
+        **🔍 Analysis Method:**
+        - Identifies top competitors by relevance/keyword overlap
+        - Counts where each competitor outranks you
+        - Shows specific keyword gap opportunities
+        - Focuses on competitive pressure for declining queries
+        """)
+    
+    # Key insights preview
+    st.markdown("### 🎯 Analysis Insights You'll Get")
+    
+    insight_col1, insight_col2, insight_col3, insight_col4 = st.columns(4)
+    
+    with insight_col1:
+        st.markdown("""
+        **🥇 Top Competitors**
+        - Real search competitors by relevance
+        - Keyword overlap analysis
+        """)
+    
+    with insight_col2:
+        st.markdown("""
+        **📊 Outrank Counts**
+        - Where competitors beat you
+        - Win/loss ratios by competitor
+        """)
+    
+    with insight_col3:
+        st.markdown("""
+        **🎯 Gap Opportunities**
+        - Specific keywords to target
+        - Competitive displacement analysis
+        """)
+    
+    with insight_col4:
+        st.markdown("""
+        **📉 Pressure Analysis**
+        - Competitors affecting declining queries
+        - Strategic counter-moves
+        """)
+    
+    st.markdown("---")
+    
+    # File upload section
+    st.markdown("### 📤 Upload Your Data Files")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("#### 🏆 Semrush Competitors (Required)")
+        competitors_file = st.file_uploader(
+            "Upload Semrush Competitors file",
+            type=['csv', 'xlsx', 'xls'],
+            key="competitors_file",
+            help="Export from Semrush: Organic Research → Competitors"
+        )
+        
+    with col2:
+        st.markdown("#### 📊 Your Positions (Required)")
+        your_positions_file = st.file_uploader(
+            "Upload Your Semrush Positions file",
+            type=['csv', 'xlsx', 'xls'],
+            key="your_positions_file",
+            help="Export from Semrush: Organic Research → Positions (current)"
+        )
+    
+    # Optional competitor positions
+    st.markdown("#### 🎯 Competitor Positions (Optional - for detailed gap analysis)")
+    competitor_positions_files = st.file_uploader(
+        "Upload competitor position files (one per competitor)",
+        type=['csv', 'xlsx', 'xls'],
+        accept_multiple_files=True,
+        key="competitor_positions_files",
+        help="Optional: Individual position exports for top competitors"
+    )
+    
+    # Process files if minimum required files uploaded
+    if competitors_file is not None and your_positions_file is not None:
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            run_competitor_analysis = st.button("🚀 Run Competitor Analysis", key="run_competitors", type="primary", use_container_width=True)
+        
+        if run_competitor_analysis:
+            with st.spinner("🔄 Analyzing competitive landscape..."):
+                try:
+                    # Load main files
+                    competitors_df = normalize_columns(read_uploaded_file(competitors_file))
+                    your_positions_df = normalize_columns(read_uploaded_file(your_positions_file))
+                    
+                    # Load optional competitor files
+                    competitor_data = {}
+                    if competitor_positions_files:
+                        for comp_file in competitor_positions_files:
+                            try:
+                                comp_df = normalize_columns(read_uploaded_file(comp_file))
+                                # Try to infer domain from filename or data
+                                domain = infer_competitor_domain(comp_file.name, comp_df)
+                                if domain:
+                                    competitor_data[domain] = comp_df
+                            except Exception as e:
+                                st.warning(f"Could not process {comp_file.name}: {str(e)}")
+                    
+                    # Validate data
+                    validation_passed, validation_message = validate_competitor_data(competitors_df, your_positions_df)
+                    
+                    if not validation_passed:
+                        st.error(validation_message)
+                        st.stop()
+                    
+                    # Perform analysis
+                    competitor_results = analyze_competitor_gaps(competitors_df, your_positions_df, competitor_data)
+                    
+                    # Display results
+                    display_competitor_results(competitor_results)
+                    
+                except Exception as e:
+                    st.error(f"❌ Error processing files: {str(e)}")
+                    st.info("💡 Please ensure you've uploaded valid Semrush files")
+    else:
+        missing = []
+        if competitors_file is None:
+            missing.append("Competitors file")
+        if your_positions_file is None:
+            missing.append("Your Positions file")
+        st.info(f"📤 Please upload: {', '.join(missing)}")
+
+def infer_competitor_domain(filename, df):
+    """Infer competitor domain from filename or data"""
+    
+    # Try to extract domain from filename
+    import re
+    domain_match = re.search(r'([a-z0-9.-]+\.[a-z]{2,})', filename.lower())
+    if domain_match:
+        domain = domain_match.group(1).replace("www.", "")
+        return domain
+    
+    # Try to extract from URL column if present
+    url_col = find_column(df.columns, ['url', 'page', 'landing page'])
+    if url_col and not df[url_col].empty:
+        try:
+            from urllib.parse import urlparse
+            sample_url = df[url_col].dropna().iloc[0]
+            parsed = urlparse(str(sample_url))
+            domain = parsed.netloc.lower().replace("www.", "")
+            return domain if domain else None
+        except:
+            pass
+    
+    return None
+
+def validate_competitor_data(competitors_df, positions_df):
+    """Validate competitor analysis data"""
+    
+    # Check competitors file
+    domain_col = find_column(competitors_df.columns, ['domain', 'competitor', 'competitor domain'])
+    
+    if not domain_col:
+        return False, f"❌ Competitors file missing domain column. Available: {list(competitors_df.columns)[:10]}"
+    
+    # Check positions file
+    keyword_col = find_column(positions_df.columns, ['keyword'])
+    position_col = find_column(positions_df.columns, ['position'])
+    
+    missing = []
+    if not keyword_col:
+        missing.append('Keyword')
+    if not position_col:
+        missing.append('Position')
+    
+    if missing:
+        return False, f"❌ Your Positions file missing: {missing}. Available: {list(positions_df.columns)[:10]}"
+    
+    if len(competitors_df) == 0 or len(positions_df) == 0:
+        return False, "❌ One or both files appear to be empty"
+    
+    return True, "✅ Data validation passed"
+
+def analyze_competitor_gaps(competitors_df, your_positions_df, competitor_data):
+    """Analyze competitor gaps following the prototype methodology"""
+    
+    # 1. Process competitors data
+    domain_col = find_column(competitors_df.columns, ['domain', 'competitor', 'competitor domain'])
+    relevance_col = find_column(competitors_df.columns, ['competitor relevance', 'relevance'])
+    common_kw_col = find_column(competitors_df.columns, ['common keywords', 'common kws', 'common'])
+    traffic_col = find_column(competitors_df.columns, ['organic keywords', 'organic traffic'])
+    
+    competitors_work = pd.DataFrame()
+    competitors_work['Domain'] = competitors_df[domain_col].astype(str).str.strip()
+    
+    if relevance_col:
+        competitors_work['Relevance'] = pd.to_numeric(competitors_df[relevance_col], errors='coerce')
+    if common_kw_col:
+        competitors_work['Common_Keywords'] = pd.to_numeric(competitors_df[common_kw_col], errors='coerce')
+    if traffic_col:
+        competitors_work['Organic_Traffic'] = pd.to_numeric(competitors_df[traffic_col], errors='coerce')
+    
+    # Sort by relevance or common keywords
+    if 'Relevance' in competitors_work.columns and competitors_work['Relevance'].notna().any():
+        competitors_work = competitors_work.sort_values('Relevance', ascending=False)
+    elif 'Common_Keywords' in competitors_work.columns:
+        competitors_work = competitors_work.sort_values('Common_Keywords', ascending=False)
+    
+    # Get top 5 competitors
+    top_competitors = competitors_work.head(5)
+    
+    # 2. Process your positions
+    keyword_col = find_column(your_positions_df.columns, ['keyword'])
+    position_col = find_column(your_positions_df.columns, ['position'])
+    url_col = find_column(your_positions_df.columns, ['url', 'page'])
+    
+    your_positions_work = pd.DataFrame()
+    your_positions_work['Keyword'] = your_positions_df[keyword_col].astype(str).str.strip().str.lower()
+    your_positions_work['Your_Position'] = pd.to_numeric(your_positions_df[position_col], errors='coerce')
+    
+    if url_col:
+        your_positions_work['Your_URL'] = your_positions_df[url_col].astype(str)
+    
+    # Keep best position per keyword
+    your_positions_work = (your_positions_work.groupby('Keyword')
+                          .agg({'Your_Position': 'min', 'Your_URL': 'first' if url_col else 'count'})
+                          .reset_index())
+    
+    # 3. Build gap analysis for competitors with position data
+    gap_analysis = []
+    summary_counts = []
+    
+    for _, competitor in top_competitors.iterrows():
+        domain = competitor['Domain']
+        
+        # Check if we have position data for this competitor
+        if domain in competitor_data:
+            comp_df = competitor_data[domain]
+            
+            # Process competitor positions
+            comp_kw_col = find_column(comp_df.columns, ['keyword'])
+            comp_pos_col = find_column(comp_df.columns, ['position'])
+            
+            if comp_kw_col and comp_pos_col:
+                comp_positions = pd.DataFrame()
+                comp_positions['Keyword'] = comp_df[comp_kw_col].astype(str).str.strip().str.lower()
+                comp_positions['Comp_Position'] = pd.to_numeric(comp_df[comp_pos_col], errors='coerce')
+                
+                # Keep best position per keyword
+                comp_positions = (comp_positions.groupby('Keyword')['Comp_Position'].min().reset_index())
+                
+                # Join with your positions
+                gap_df = your_positions_work.merge(comp_positions, on='Keyword', how='inner')
+                
+                # Calculate effective ranks (treat 0/NaN as worst)
+                def effective_rank(series):
+                    return np.where((series <= 0) | pd.isna(series), 1000, series)
+                
+                your_eff = effective_rank(gap_df['Your_Position'])
+                comp_eff = effective_rank(gap_df['Comp_Position'])
+                
+                gap_df['Comp_Outranks'] = (comp_eff < your_eff)
+                gap_df['Gap'] = (your_eff - comp_eff).astype(float)
+                gap_df['Competitor'] = domain
+                
+                gap_analysis.append(gap_df)
+                
+                # Summary counts
+                outranked = int(gap_df['Comp_Outranks'].sum())
+                we_outrank = int((your_eff < comp_eff).sum())
+                ties = int((your_eff == comp_eff).sum())
+                total_matched = len(gap_df)
+                
+                summary_counts.append({
+                    'Competitor': domain,
+                    'Outranked_Us': outranked,
+                    'We_Outrank': we_outrank,
+                    'Ties': ties,
+                    'Matched_Keywords': total_matched,
+                    'Relevance': competitor.get('Relevance', np.nan),
+                    'Common_Keywords': competitor.get('Common_Keywords', np.nan)
+                })
+    
+    # Combine all gap data
+    all_gaps = pd.concat(gap_analysis) if gap_analysis else pd.DataFrame()
+    summary_df = pd.DataFrame(summary_counts)
+    
+    # 4. Focus on losing queries if available (check if query analysis was run)
+    losing_focus = pd.DataFrame()
+    if hasattr(st.session_state, 'query_results') and 'top_losers' in st.session_state.query_results:
+        try:
+            losing_queries = st.session_state.query_results['top_losers']['Query'].str.lower().tolist()[:50]
+            if not all_gaps.empty:
+                losing_focus = all_gaps[all_gaps['Keyword'].isin(losing_queries) & all_gaps['Comp_Outranks']]
+        except:
+            pass  # Skip if query data not available or incompatible
+    
+    return {
+        'top_competitors': top_competitors,
+        'your_keywords_count': len(your_positions_work),
+        'gap_analysis': all_gaps,
+        'summary_counts': summary_df,
+        'losing_query_focus': losing_focus,
+        'has_position_data': len(gap_analysis) > 0,
+        'competitors_with_data': list(competitor_data.keys())
+    }
+
+def display_competitor_results(results):
+    """Display competitor analysis results"""
+    
+    # Key metrics
+    st.markdown('<div class="section-header">🏆 Competitive Landscape Summary</div>', unsafe_allow_html=True)
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric(
+            label="Top Competitors",
+            value=len(results['top_competitors']),
+            help="Based on relevance and keyword overlap"
+        )
+    
+    with col2:
+        st.metric(
+            label="Your Keywords",
+            value=f"{results['your_keywords_count']:,}",
+            help="Total keywords in your position data"
+        )
+    
+    with col3:
+        if results['has_position_data']:
+            total_gaps = len(results['gap_analysis'])
+            st.metric(
+                label="Gap Analysis Keywords",
+                value=f"{total_gaps:,}",
+                help="Keywords with competitive comparison data"
+            )
+        else:
+            st.metric(
+                label="Gap Analysis",
+                value="Limited",
+                help="Upload competitor position files for detailed gaps"
+            )
+    
+    with col4:
+        competitors_with_data = len(results['competitors_with_data'])
+        st.metric(
+            label="Competitors with Data",
+            value=competitors_with_data,
+            help="Competitors with uploaded position data"
+        )
+    
+    # Top Competitors Table
+    st.markdown('<div class="section-header">🎯 Top Search Competitors</div>', unsafe_allow_html=True)
+    st.markdown("*Domains most similar to you in search results (not necessarily business competitors)*")
+    
+    display_cols = ['Domain']
+    if 'Relevance' in results['top_competitors'].columns:
+        display_cols.append('Relevance')
+    if 'Common_Keywords' in results['top_competitors'].columns:
+        display_cols.append('Common_Keywords')
+    if 'Organic_Traffic' in results['top_competitors'].columns:
+        display_cols.append('Organic_Traffic')
+    
+    competitors_display = results['top_competitors'][display_cols].copy()
+    st.dataframe(competitors_display, use_container_width=True, hide_index=True)
+    
+    # Gap Analysis Results
+    if results['has_position_data']:
+        st.markdown('<div class="section-header">📊 Competitive Gap Analysis</div>', unsafe_allow_html=True)
+        
+        # Summary counts
+        if not results['summary_counts'].empty:
+            st.markdown("**Where competitors outrank you:**")
+            
+            summary_display = results['summary_counts'].copy()
+            if 'Relevance' in summary_display.columns:
+                summary_display = summary_display.drop('Relevance', axis=1)
+            if 'Common_Keywords' in summary_display.columns:
+                summary_display = summary_display.drop('Common_Keywords', axis=1)
+                
+            st.dataframe(summary_display, use_container_width=True, hide_index=True)
+            
+            # Outrank chart
+            if len(results['summary_counts']) > 1:
+                fig_outrank = go.Figure(data=[
+                    go.Bar(
+                        y=results['summary_counts']['Competitor'],
+                        x=results['summary_counts']['Outranked_Us'],
+                        orientation='h',
+                        marker_color='#e74c3c',
+                        text=results['summary_counts']['Outranked_Us'],
+                        textposition='outside'
+                    )
+                ])
+                
+                fig_outrank.update_layout(
+                    title=dict(text='Keywords Where Competitor Outranks You', font=dict(size=20)),
+                    xaxis_title='Keywords Count',
+                    yaxis_title='Competitor',
+                    height=400,
+                    margin=dict(l=150, r=60, t=80, b=60),
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    yaxis=dict(autorange='reversed')
+                )
+                
+                st.plotly_chart(fig_outrank, use_container_width=True, config={'displayModeBar': False})
+        
+        # Detailed gap opportunities
+        if not results['gap_analysis'].empty:
+            st.markdown("### 🎯 Specific Gap Opportunities")
+            st.markdown("*Keywords where competitors rank better than you - sorted by largest gaps*")
+            
+            gap_opportunities = results['gap_analysis'][results['gap_analysis']['Comp_Outranks']].copy()
+            gap_opportunities = gap_opportunities.sort_values(['Competitor', 'Gap'], ascending=[True, False])
+            
+            display_cols = ['Competitor', 'Keyword', 'Your_Position', 'Comp_Position', 'Gap']
+            if 'Your_URL' in gap_opportunities.columns:
+                display_cols.append('Your_URL')
+            
+            gap_display = gap_opportunities[display_cols].head(50)
+            gap_display.columns = ['Competitor', 'Keyword', 'Your Position', 'Competitor Position', 'Gap'] + (['Your URL'] if len(display_cols) > 5 else [])
+            
+            st.dataframe(gap_display, use_container_width=True, hide_index=True, height=400)
+        
+        # Focus on losing queries
+        if not results['losing_query_focus'].empty:
+            st.markdown("### 📉 Competitive Pressure on Declining Queries")
+            st.markdown("*Competitors outranking you on queries that lost traffic*")
+            
+            losing_display = results['losing_query_focus'][['Competitor', 'Keyword', 'Your_Position', 'Comp_Position', 'Gap']].copy()
+            losing_display.columns = ['Competitor', 'Keyword', 'Your Position', 'Competitor Position', 'Gap']
+            
+            st.dataframe(losing_display, use_container_width=True, hide_index=True, height=300)
+        elif results['has_position_data']:
+            st.info("💡 Run Query Analysis first to see competitive pressure on your declining queries")
+    
+    else:
+        st.markdown('<div class="section-header">📊 Limited Gap Analysis</div>', unsafe_allow_html=True)
+        st.info("🎯 Upload individual competitor position files to see detailed gap analysis, outrank counts, and specific keyword opportunities.")
+    
+    # Strategic insights
+    st.markdown('<div class="section-header">💡 Strategic Insights</div>', unsafe_allow_html=True)
+    insights = generate_competitor_insights(results)
+    st.markdown(f'<div class="insight-box">{insights}</div>', unsafe_allow_html=True)
+    
+    # Download section
+    st.markdown('<div class="section-header">📥 Download Results</div>', unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        summary_report = create_competitor_summary_report(results)
+        st.download_button(
+            label="📄 Download Competitor Analysis Report",
+            data=summary_report,
+            file_name=f"competitor_analysis_{datetime.now().strftime('%Y%m%d')}.txt",
+            mime="text/plain"
+        )
+    
+    with col2:
+        if results['has_position_data']:
+            csv_buffer = io.StringIO()
+            results['gap_analysis'].to_csv(csv_buffer, index=False)
+            
+            st.download_button(
+                label="📊 Download Gap Analysis (CSV)",
+                data=csv_buffer.getvalue(),
+                file_name=f"competitor_gaps_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv"
+            )
+        else:
+            st.download_button(
+                label="📊 Download Competitors List (CSV)", 
+                data=results['top_competitors'].to_csv(index=False),
+                file_name=f"top_competitors_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv"
+            )
+
+def generate_competitor_insights(results):
+    """Generate strategic insights from competitor analysis"""
+    insights = []
+    
+    # Competitor identification insights
+    competitors_count = len(results['top_competitors'])
+    insights.append(f"<b>🎯 Competitive Landscape:</b> Identified {competitors_count} key search competitors based on keyword overlap and relevance.")
+    
+    # Gap analysis insights
+    if results['has_position_data']:
+        total_gaps = len(results['gap_analysis'])
+        outranked_keywords = len(results['gap_analysis'][results['gap_analysis']['Comp_Outranks']]) if not results['gap_analysis'].empty else 0
+        
+        if not results['summary_counts'].empty:
+            top_threat = results['summary_counts'].loc[results['summary_counts']['Outranked_Us'].idxmax()]
+            insights.append(f"<b>🥇 Top Competitive Threat:</b> {top_threat['Competitor']} outranks you on {top_threat['Outranked_Us']} keywords from {top_threat['Matched_Keywords']} matched keywords.")
+        
+        if outranked_keywords > 0:
+            insights.append(f"<b>📊 Gap Opportunities:</b> {outranked_keywords:,} keywords where competitors rank better than you - prime targets for content optimization and competitive analysis.")
+        
+        # Losing query focus
+        if not results['losing_query_focus'].empty:
+            losing_count = len(results['losing_query_focus'])
+            insights.append(f"<b>🔴 Competitive Pressure:</b> {losing_count} of your declining queries show direct competitive displacement - these require immediate attention.")
+        
+        # Strategy recommendations
+        if outranked_keywords > total_gaps * 0.3:  # If >30% of gaps show we're behind
+            insights.append("<b>⚡ Action Priority:</b> High competitive pressure detected. Focus on content depth, technical optimization, and link building for gap keywords.")
+    else:
+        insights.append("<b>🎯 Next Steps:</b> Upload competitor position files to unlock detailed gap analysis, outrank counts, and specific optimization opportunities.")
+    
+    return "<br><br>".join(insights)
+
+def create_competitor_summary_report(results):
+    """Create downloadable competitor analysis report"""
+    
+    report = f"""
+COMPETITOR GAP ANALYSIS REPORT
+Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+===========================================
+EXECUTIVE SUMMARY
+===========================================
+
+Top Search Competitors Identified: {len(results['top_competitors'])}
+Your Keywords Analyzed: {results['your_keywords_count']:,}
+Gap Analysis Available: {'Yes' if results['has_position_data'] else 'Limited - upload competitor data'}
+
+===========================================
+TOP SEARCH COMPETITORS
+===========================================
+
+"""
+    
+    for _, row in results['top_competitors'].iterrows():
+        relevance = f" | Relevance: {row['Relevance']}" if 'Relevance' in row and pd.notna(row['Relevance']) else ""
+        common_kw = f" | Common KW: {row['Common_Keywords']:,.0f}" if 'Common_Keywords' in row and pd.notna(row['Common_Keywords']) else ""
+        report += f"• {row['Domain']}{relevance}{common_kw}\n"
+    
+    if results['has_position_data']:
+        report += f"""
+
+===========================================
+COMPETITIVE OUTRANK ANALYSIS
+===========================================
+
+"""
+        
+        for _, row in results['summary_counts'].iterrows():
+            report += f"• {row['Competitor']}: Outranks you on {row['Outranked_Us']} keywords (from {row['Matched_Keywords']} matched)\n"
+        
+        if not results['gap_analysis'].empty:
+            report += f"""
+
+===========================================
+TOP GAP OPPORTUNITIES (Sample)
+===========================================
+
+"""
+            
+            gap_sample = results['gap_analysis'][results['gap_analysis']['Comp_Outranks']].head(20)
+            for _, row in gap_sample.iterrows():
+                report += f"• {row['Keyword']} | You: #{row['Your_Position']} vs {row['Competitor']}: #{row['Comp_Position']} (Gap: {row['Gap']:.0f})\n"
+    
+    report += f"""
+
+===========================================
+STRATEGIC INSIGHTS
+===========================================
+
+{generate_competitor_insights(results).replace('<b>', '').replace('</b>', '').replace('<br><br>', '\n\n').replace('🎯', '• ').replace('🥇', '• ').replace('📊', '• ').replace('🔴', '• ').replace('⚡', '• ')}
+
+===========================================
+"""
+    
+    return report
 
 def traffic_attribution_analysis():
     """Analyze sitewide traffic attribution from GSC"""
