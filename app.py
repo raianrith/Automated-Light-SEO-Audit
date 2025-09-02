@@ -3506,8 +3506,266 @@ def display_competitor_results(results):
             st.info("💡 Run Query Analysis first to see competitive pressure on your declining queries")
     
     else:
-        st.markdown('<div class="section-header">📊 Limited Gap Analysis</div>', unsafe_allow_html=True)
-        st.info("🎯 Upload individual competitor position files to see detailed gap analysis, outrank counts, and specific keyword opportunities.")
+        st.markdown('<div class="section-header">📊 Competitive Intelligence Analysis</div>', unsafe_allow_html=True)
+        st.markdown("*Analysis based on competitor overlap and your current positions*")
+        
+        # Enhanced analysis without detailed position data
+        enhanced_results = analyze_competitive_intelligence(results)
+        display_enhanced_competitor_analysis(enhanced_results)
+
+def analyze_competitive_intelligence(results):
+    """Enhanced analysis using just competitors and your positions data"""
+    
+    # Get your top keywords by position quality
+    your_positions = results['gap_analysis'] if hasattr(results, 'gap_analysis') and not results['gap_analysis'].empty else pd.DataFrame()
+    
+    # If we don't have position data in results, we need to get it differently
+    # Let's enhance the basic competitor results
+    competitors = results['top_competitors']
+    
+    # 1. Market positioning analysis
+    positioning_analysis = analyze_market_positioning(competitors)
+    
+    # 2. Competitive pressure estimation
+    pressure_analysis = estimate_competitive_pressure(competitors, results['your_keywords_count'])
+    
+    # 3. Opportunity sizing
+    opportunity_analysis = analyze_opportunity_sizing(competitors)
+    
+    return {
+        **results,
+        'market_positioning': positioning_analysis,
+        'competitive_pressure': pressure_analysis,
+        'opportunity_analysis': opportunity_analysis
+    }
+
+def analyze_market_positioning(competitors_df):
+    """Analyze market positioning based on competitor metrics"""
+    
+    if competitors_df.empty:
+        return {}
+    
+    # Calculate market share indicators
+    total_common_kw = competitors_df['Common_Keywords'].sum() if 'Common_Keywords' in competitors_df.columns else 0
+    
+    positioning = []
+    for _, comp in competitors_df.iterrows():
+        common_kw = comp.get('Common_Keywords', 0)
+        relevance = comp.get('Relevance', 0)
+        
+        # Market share estimation
+        kw_share = (common_kw / total_common_kw * 100) if total_common_kw > 0 else 0
+        
+        # Threat level based on relevance and overlap
+        if relevance > 80 and common_kw > 1000:
+            threat_level = "High"
+        elif relevance > 60 and common_kw > 500:
+            threat_level = "Medium"
+        else:
+            threat_level = "Low"
+        
+        positioning.append({
+            'Domain': comp['Domain'],
+            'Keyword_Share': kw_share,
+            'Threat_Level': threat_level,
+            'Common_Keywords': common_kw,
+            'Relevance': relevance
+        })
+    
+    return pd.DataFrame(positioning)
+
+def estimate_competitive_pressure(competitors_df, your_keyword_count):
+    """Estimate competitive pressure across different areas"""
+    
+    if competitors_df.empty:
+        return {}
+    
+    # High competition indicators
+    high_competition_count = len(competitors_df[
+        (competitors_df.get('Relevance', 0) > 70) & 
+        (competitors_df.get('Common_Keywords', 0) > your_keyword_count * 0.3)
+    ])
+    
+    # Market saturation estimate
+    avg_common_keywords = competitors_df['Common_Keywords'].mean() if 'Common_Keywords' in competitors_df.columns else 0
+    saturation_level = "High" if avg_common_keywords > your_keyword_count * 0.5 else "Medium" if avg_common_keywords > your_keyword_count * 0.2 else "Low"
+    
+    # Competitive intensity
+    total_competitors = len(competitors_df)
+    high_relevance_competitors = len(competitors_df[competitors_df.get('Relevance', 0) > 60])
+    
+    intensity_score = (high_relevance_competitors / total_competitors * 100) if total_competitors > 0 else 0
+    
+    return {
+        'high_competition_competitors': high_competition_count,
+        'market_saturation': saturation_level,
+        'competitive_intensity': intensity_score,
+        'avg_keyword_overlap': avg_common_keywords
+    }
+
+def analyze_opportunity_sizing(competitors_df):
+    """Analyze opportunity sizing based on competitor data"""
+    
+    if competitors_df.empty:
+        return {}
+    
+    # Opportunity categories
+    opportunities = []
+    
+    for _, comp in competitors_df.iterrows():
+        common_kw = comp.get('Common_Keywords', 0)
+        relevance = comp.get('Relevance', 0)
+        
+        # Determine opportunity type
+        if relevance < 50 and common_kw > 500:
+            opp_type = "Keyword Expansion"
+            priority = "High"
+        elif relevance > 80 and common_kw < 200:
+            opp_type = "Niche Domination"
+            priority = "Medium"
+        elif relevance > 70 and common_kw > 1000:
+            opp_type = "Head-to-Head Competition" 
+            priority = "High"
+        else:
+            opp_type = "Market Monitoring"
+            priority = "Low"
+        
+        opportunities.append({
+            'Domain': comp['Domain'],
+            'Opportunity_Type': opp_type,
+            'Priority': priority,
+            'Estimated_Keywords': common_kw,
+            'Competitive_Strength': "Strong" if relevance > 70 else "Moderate" if relevance > 40 else "Weak"
+        })
+    
+    return pd.DataFrame(opportunities)
+
+def display_enhanced_competitor_analysis(results):
+    """Display enhanced competitor analysis without detailed position data"""
+    
+    # Market Positioning Analysis
+    if 'market_positioning' in results and not results['market_positioning'].empty:
+        st.markdown("### 🎯 Market Positioning Analysis")
+        
+        # Market share chart
+        positioning = results['market_positioning']
+        
+        fig_market = go.Figure(data=[
+            go.Bar(
+                x=positioning['Domain'],
+                y=positioning['Keyword_Share'],
+                marker_color=['#e74c3c' if threat == 'High' else '#f39c12' if threat == 'Medium' else '#27ae60' 
+                            for threat in positioning['Threat_Level']],
+                text=[f"{share:.1f}%" for share in positioning['Keyword_Share']],
+                textposition='outside'
+            )
+        ])
+        
+        fig_market.update_layout(
+            title=dict(text='Estimated Market Share by Keyword Overlap', font=dict(size=18)),
+            xaxis_title='Competitor',
+            yaxis_title='Keyword Overlap Share (%)',
+            height=400,
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            xaxis_tickangle=-45
+        )
+        
+        st.plotly_chart(fig_market, use_container_width=True, config={'displayModeBar': False})
+        
+        # Positioning table
+        st.dataframe(positioning, use_container_width=True, hide_index=True)
+    
+    # Competitive Pressure Analysis
+    if 'competitive_pressure' in results:
+        pressure = results['competitive_pressure']
+        
+        st.markdown("### ⚠️ Competitive Pressure Assessment")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric(
+                label="High Competition",
+                value=pressure['high_competition_competitors'],
+                help="Competitors with high relevance and significant keyword overlap"
+            )
+        
+        with col2:
+            color = "🔴" if pressure['market_saturation'] == "High" else "🟡" if pressure['market_saturation'] == "Medium" else "🟢"
+            st.metric(
+                label="Market Saturation",
+                value=f"{color} {pressure['market_saturation']}",
+                help="Level of competitive saturation in your market"
+            )
+        
+        with col3:
+            st.metric(
+                label="Competitive Intensity",
+                value=f"{pressure['competitive_intensity']:.0f}%",
+                help="Percentage of competitors with high relevance scores"
+            )
+        
+        with col4:
+            st.metric(
+                label="Avg Keyword Overlap",
+                value=f"{pressure['avg_keyword_overlap']:.0f}",
+                help="Average keywords shared with competitors"
+            )
+    
+    # Opportunity Analysis
+    if 'opportunity_analysis' in results and not results['opportunity_analysis'].empty:
+        st.markdown("### 🎯 Strategic Opportunities")
+        
+        opportunities = results['opportunity_analysis']
+        
+        # Opportunity type distribution
+        opp_counts = opportunities['Opportunity_Type'].value_counts()
+        
+        fig_opp = go.Figure(data=[
+            go.Pie(
+                labels=opp_counts.index,
+                values=opp_counts.values,
+                hole=0.3,
+                marker_colors=['#3498db', '#e74c3c', '#f39c12', '#27ae60']
+            )
+        ])
+        
+        fig_opp.update_layout(
+            title=dict(text='Strategic Opportunity Distribution', font=dict(size=18)),
+            height=400,
+            annotations=[dict(text='Opportunities', x=0.5, y=0.5, font_size=16, showarrow=False)]
+        )
+        
+        st.plotly_chart(fig_opp, use_container_width=True, config={'displayModeBar': False})
+        
+        # Opportunities table
+        st.markdown("**Detailed Opportunity Analysis:**")
+        st.dataframe(opportunities, use_container_width=True, hide_index=True)
+    
+    # Competitive Intelligence Summary
+    st.markdown("### 📋 Competitive Intelligence Summary")
+    
+    # Generate insights for basic competitor data
+    intel_insights = []
+    
+    if 'market_positioning' in results and not results['market_positioning'].empty:
+        top_threat = results['market_positioning'].loc[results['market_positioning']['Keyword_Share'].idxmax()]
+        intel_insights.append(f"<b>🎯 Market Leader:</b> {top_threat['Domain']} has the highest keyword overlap ({top_threat['Keyword_Share']:.1f}%) and {top_threat['Threat_Level'].lower()} threat level.")
+    
+    if 'competitive_pressure' in results:
+        pressure = results['competitive_pressure']
+        intel_insights.append(f"<b>📊 Market Dynamics:</b> {pressure['market_saturation']} market saturation with {pressure['competitive_intensity']:.0f}% of competitors showing high relevance scores.")
+    
+    if 'opportunity_analysis' in results and not results['opportunity_analysis'].empty:
+        high_priority = len(results['opportunity_analysis'][results['opportunity_analysis']['Priority'] == 'High'])
+        intel_insights.append(f"<b>⚡ Action Items:</b> {high_priority} high-priority competitive opportunities identified for immediate strategic focus.")
+    
+    # Always add this insight
+    intel_insights.append("<b>🚀 Next Level:</b> Upload individual competitor position files to unlock detailed keyword gap analysis, specific ranking opportunities, and head-to-head competitive comparisons.")
+    
+    if intel_insights:
+        st.markdown(f'<div class="insight-box">{"<br><br>".join(intel_insights)}</div>', unsafe_allow_html=True)
     
     # Strategic insights
     st.markdown('<div class="section-header">💡 Strategic Insights</div>', unsafe_allow_html=True)
