@@ -118,7 +118,8 @@ def main():
         """)
     
     # Enhanced tab navigation with more sections
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+        "📋 Data Export Guide",
         "📊 Visibility Trends", 
         "🔄 Keyword Movement", 
         "📄 Page Performance",
@@ -129,24 +130,27 @@ def main():
     ])
     
     with tab1:
-        keyword_visibility_analysis()
+        data_export_instructions()
         
     with tab2:
-        keyword_movement_analysis()
+        keyword_visibility_analysis()
         
     with tab3:
-        page_performance_analysis()
+        keyword_movement_analysis()
         
     with tab4:
-        query_gains_losses_analysis()
+        page_performance_analysis()
         
     with tab5:
-        competitor_analysis()
+        query_gains_losses_analysis()
         
     with tab6:
-        traffic_attribution_analysis()
+        competitor_analysis()
         
     with tab7:
+        traffic_attribution_analysis()
+        
+    with tab8:
         st.markdown("""
         ### 🚀 Future Analysis Modules:
         
@@ -587,6 +591,228 @@ def generate_visibility_insights(results):
         insights.append("<b>🎯 Optimization Opportunity:</b> Over 40% of your keywords rank beyond position 20. Focus on improving on-page SEO and building topic authority.")
     
     return "<br><br>".join(insights)
+
+def data_export_instructions():
+    """Comprehensive guide for exporting data from various SEO tools"""
+    st.markdown('<div class="section-header">📋 Data Export Guide</div>', unsafe_allow_html=True)
+    
+    st.markdown("""
+    <div class="instruction-box">
+        <h4>🎯 Quick Reference</h4>
+        <p>This guide provides step-by-step instructions for exporting data from <b>Semrush</b>, <b>Google Search Console</b>, and <b>GA4</b>. Follow these instructions to get the exact files needed for each analysis section.</p>
+        
+        <h4>🔑 Key Rules</h4>
+        <ul>
+            <li><b>Always export CSV or Excel format</b> - Never PDF</li>
+            <li><b>Use consistent naming:</b> client_tool_report_period.csv</li>
+            <li><b>Same date ranges</b> across all exports for accuracy</li>
+            <li><b>Year-over-year comparisons</b> should use same month from previous year</li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Create expandable sections for each tool
+    with st.expander("🔍 **Semrush Exports** - Keyword Rankings & Competition Data", expanded=True):
+        
+        st.markdown("### Organic Research → Positions")
+        st.markdown("""
+        **Use for:** Keyword Visibility Trends, Competitor Analysis
+        
+        **Steps:**
+        1. Go to **Domain Analytics → Organic Research → Positions**
+        2. Set **Database** (e.g., United States)
+        3. Set **Device = Desktop** 
+        4. Set **Date = current month** (for current data)
+        5. Click **Export → CSV** or **Excel**
+        6. Save as: `client_semrush_positions_YYYY-MM.csv`
+        
+        **For Year-over-Year Analysis:**
+        - Repeat above steps but change **Date** to same month last year
+        - Save as: `client_semrush_positions_YYYY-MM_LY.csv`
+        """)
+        
+        st.markdown("### Organic Research → Position Changes")
+        st.markdown("""
+        **Use for:** Keyword Movement Analysis
+        
+        **Steps:**
+        1. Go to **Organic Research → Position Changes**
+        2. Set **Range = Last 12 months** (or desired period)
+        3. Click **Export → CSV** or **Excel**
+        4. Save as: `client_semrush_position-changes_last12m.csv`
+        """)
+        
+        st.markdown("### Organic Research → Pages")
+        st.markdown("""
+        **Use for:** Page Performance Analysis
+        
+        **Steps:**
+        1. Go to **Organic Research → Pages**
+        2. Set **Date = current month**
+        3. Click **Export → CSV** or **Excel**
+        4. Save as: `client_semrush_pages_YYYY-MM.csv`
+        """)
+        
+        st.markdown("### Organic Research → Competitors")
+        st.markdown("""
+        **Use for:** Competitor Gap Analysis
+        
+        **Steps:**
+        1. Go to **Organic Research → Competitors**
+        2. Click **Export → CSV** or **Excel**
+        3. Save as: `client_semrush_competitors_YYYY-MM.csv`
+        """)
+        
+        st.markdown("### Position Tracking (Optional)")
+        st.markdown("""
+        **Use for:** SERP Features Analysis (if project exists)
+        
+        **Steps:**
+        1. Go to **Projects → Position Tracking → Overview**
+        2. If **AI Overviews** enabled, export that tab too
+        3. Click **Export → CSV** or **Excel**
+        4. Save as: `client_semrush_tracking_YYYY-MM.csv`
+        
+        ⚠️ **Note:** Only available if you have an existing Position Tracking project
+        """)
+
+    with st.expander("🔎 **Google Search Console Exports** - Click & Impression Data"):
+        
+        st.markdown("### Search Results - Sitewide Compare")
+        st.markdown("""
+        **Use for:** Traffic Attribution Analysis
+        
+        **Steps:**
+        1. Go to **Search results** in left navigation
+        2. Set top filters:
+           - **Search type = Web**
+           - **Date → Compare → Last 3 months vs Same period last year → Apply**
+        3. Click **Export** (top right) → **CSV** or **Excel**
+        4. Save as: `client_gsc_search-results_compare_[dates].csv`
+        """)
+        
+        st.markdown("### Queries - Compare View")
+        st.markdown("""
+        **Use for:** Query Performance Analysis
+        
+        **Steps:**
+        1. In **Search results**, click **Queries** tab
+        2. Ensure **Compare** date setting is still applied from previous step
+        3. Click **Export → CSV** or **Excel**
+        4. Save as: `client_gsc_queries_compare_[dates].csv`
+        """)
+        
+        st.markdown("### Pages - Compare View")
+        st.markdown("""
+        **Use for:** Page Performance Analysis (GSC data)
+        
+        **Steps:**
+        1. In **Search results**, click **Pages** tab  
+        2. Ensure **Compare** date setting is still applied
+        3. Click **Export → CSV** or **Excel**
+        4. Save as: `client_gsc_pages_compare_[dates].csv`
+        """)
+        
+        st.markdown("""
+        💡 **Pro Tip:** Set up your date comparison once in Search Results, then export all three views (sitewide, queries, pages) with the same date settings for consistency.
+        """)
+
+    with st.expander("📊 **GA4 Exports** - Traffic & Conversion Data"):
+        
+        st.markdown("### Traffic Acquisition - Organic Search Only")
+        st.markdown("""
+        **Use for:** Traffic Attribution Analysis
+        
+        **Steps:**
+        1. Go to **Reports → Acquisition → Traffic acquisition**
+        2. Set **date picker** to same window used in GSC
+           - For YoY analysis, use **Compare** to previous year
+        3. **Add filter:** Session default channel group = **Organic Search**
+        4. Click **Share this report → Download file → CSV**
+        5. Save as: `client_ga4_traffic-acquisition_organic_[dates].csv`
+        """)
+        
+        st.markdown("### Landing Page - Organic Search Only")
+        st.markdown("""
+        **Use for:** Conversion Optimization Analysis
+        
+        **Steps:**
+        1. Go to **Reports → Engagement → Landing page**
+        2. Set **date picker** to same window as above
+        3. **Add filter:** Session default channel group = **Organic Search**  
+        4. Click **Share this report → Download file → CSV**
+        5. Save as: `client_ga4_landing-page_organic_[dates].csv`
+        """)
+        
+        st.markdown("### If Landing Page Report Missing")
+        st.markdown("""
+        **Alternative: Build Custom Exploration**
+        
+        1. Go to **Explore** → **+ Blank exploration**
+        2. **Name it:** Landing Page -- Organic Search
+        3. **Add dimension:** Landing page + query string
+        4. **Add metrics:** Sessions, Active users, Engaged sessions, Average engagement time, Key events
+        5. **Add filter:** Session default channel group = "Organic Search"
+        6. **Export:** Top right → Export → CSV
+        
+        This creates the same data as the standard Landing Page report.
+        """)
+
+    with st.expander("✅ **File Validation Checklist**"):
+        st.markdown("""
+        Before uploading your files, verify:
+        
+        **✅ Format Requirements:**
+        - Files are in CSV or Excel format (never PDF)
+        - Column headers are present and readable
+        - Data contains expected metrics (clicks, impressions, positions, etc.)
+        
+        **✅ Date Consistency:**
+        - All files use the same date ranges
+        - Year-over-year comparisons use same month from previous year
+        - Compare periods match between GSC and GA4 exports
+        
+        **✅ File Naming:**
+        - Clear, consistent naming convention
+        - Include client, tool, report type, and date period
+        - Example: `acme_semrush_positions_2024-08.csv`
+        
+        **✅ Data Quality:**
+        - Files contain data (not empty exports)
+        - Position data is numeric (not text)
+        - Keyword/Query lists are complete
+        """)
+
+    with st.expander("🆘 **Troubleshooting Common Issues**"):
+        st.markdown("""
+        **"Column not found" errors:**
+        - Column names vary between exports - the tool auto-detects most variations
+        - Ensure you're exporting from the correct section (Positions vs Position Changes)
+        - Check that headers are in English (not localized)
+        
+        **Excel files won't upload:**
+        - Try exporting as CSV instead
+        - Ensure file isn't password protected
+        - Check file size (very large files may timeout)
+        
+        **Missing data in analysis:**
+        - Verify date ranges match between current and previous exports
+        - Some tools have data limitations (GSC keeps ~16 months)
+        - Position Tracking requires existing project setup
+        
+        **GSC Compare issues:**
+        - Use "Same period last year" not custom date ranges
+        - Ensure you're comparing like periods (3 months vs 3 months)
+        - Web search type should be selected
+        
+        **GA4 Filter problems:**
+        - Use exact text "Organic Search" for channel group filter
+        - Default channel group is different from source/medium
+        - Some accounts have custom channel definitions
+        """)
+
+    st.markdown("---")
+    st.success("💡 **Ready to start?** Choose an analysis tab above and follow the specific file requirements for each section!")
 
 def keyword_movement_analysis():
     """Analyze keyword movement distribution from Semrush Position Changes"""
