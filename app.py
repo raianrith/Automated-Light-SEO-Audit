@@ -1425,17 +1425,29 @@ STRATEGIC INSIGHTS
     return report
 
 def page_performance_analysis():
-    """Analyze page performance from Semrush Pages data"""
+    """Analyze page performance from Semrush and GSC data"""
     st.markdown('<div class="section-header">📄 Page Performance Analysis</div>', unsafe_allow_html=True)
+    
+    # Create sub-tabs for different data sources
+    semrush_tab, gsc_tab = st.tabs(["🔍 Semrush Analysis", "📊 Google Search Console Analysis"])
+    
+    with semrush_tab:
+        semrush_page_analysis()
+    
+    with gsc_tab:
+        gsc_page_analysis()
+
+def semrush_page_analysis():
+    """Semrush Pages Analysis (original functionality)"""
     
     # Modern instruction design using containers and columns
     with st.container():
-        st.markdown("### 📊 Analysis Overview")
+        st.markdown("### 📊 Semrush Analysis Overview")
         
         col1, col2 = st.columns([2, 1])
         with col1:
             st.markdown("""
-            This analysis examines your top-performing pages to understand:
+            This analysis examines your top-performing pages using Semrush data:
             
             **🎯 Key Questions Answered:**
             - How concentrated is your organic traffic? (Pareto analysis)
@@ -1448,11 +1460,11 @@ def page_performance_analysis():
             st.info("""
             **💡 Strategic Value**
             
-            Identifies your highest-value pages for protection and reveals optimization opportunities across your site.
+            Identifies your highest-value pages for protection and reveals optimization opportunities.
             """)
     
     # File requirements in expandable section
-    with st.expander("📁 **File Requirements & Setup**", expanded=False):
+    with st.expander("📁 **Semrush File Requirements**", expanded=False):
         st.markdown("""
         **Required Files:** 1 Semrush Pages export
         
@@ -1462,84 +1474,37 @@ def page_performance_analysis():
         | **Time Period** | Current month |
         | **Format** | CSV or Excel |
         | **Must Include** | URL, Traffic, Traffic %, Number of Keywords |
-        
-        **📋 Export Steps:**
-        1. Go to Domain Analytics → Organic Research → Pages
-        2. Set Date = current month
-        3. Click Export → CSV or Excel
-        4. Save as: client_semrush_pages_YYYY-MM.csv
-        """)
-    
-    # Key insights preview
-    st.markdown("### 🎯 Analysis Insights You'll Get")
-    
-    insight_col1, insight_col2, insight_col3, insight_col4 = st.columns(4)
-    
-    with insight_col1:
-        st.markdown("""
-        **📈 Traffic Concentration**
-        - Pareto curve analysis
-        - Pages to reach 50/80/90% traffic
-        """)
-    
-    with insight_col2:
-        st.markdown("""
-        **🏆 Efficiency Leaders**
-        - Traffic per keyword ratios
-        - High-performing content patterns
-        """)
-    
-    with insight_col3:
-        st.markdown("""
-        **🗂️ Content Hubs**
-        - Directory-level traffic analysis
-        - Hub performance insights
-        """)
-    
-    with insight_col4:
-        st.markdown("""
-        **🎯 Long-tail Opportunities**
-        - High breadth, low efficiency pages
-        - Internal linking opportunities
         """)
     
     st.markdown("---")
     
     # File upload section
-    st.markdown("### 📤 Upload Your Data File")
+    st.markdown("### 📤 Upload Semrush Pages Data")
     
     pages_file = st.file_uploader(
         "Upload Semrush Pages file",
         type=['csv', 'xlsx', 'xls'],
         key="semrush_pages",
-        help="Export from Semrush: Organic Research → Pages (CSV or Excel format)"
+        help="Export from Semrush: Organic Research → Pages"
     )
     
     # Process file if uploaded
     if pages_file is not None:
-        # Add Run Analysis button (centered)
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
-            run_pages_analysis = st.button("🚀 Run Page Analysis", key="run_pages", type="primary", use_container_width=True)
+            run_semrush_analysis = st.button("🚀 Run Semrush Analysis", key="run_semrush_pages", type="primary", use_container_width=True)
         
-        # Display results outside column context for full width
-        if run_pages_analysis:
-            with st.spinner("🔄 Analyzing page performance..."):
+        if run_semrush_analysis:
+            with st.spinner("🔄 Analyzing Semrush page performance..."):
                 try:
-                    # Load and validate data
                     df = normalize_columns(read_uploaded_file(pages_file))
-                    
-                    # Validate required columns
                     validation_passed, validation_message = validate_pages_data(df)
                     
                     if not validation_passed:
                         st.error(validation_message)
                         st.stop()
                     
-                    # Perform analysis
                     pages_results = analyze_page_performance(df)
-                    
-                    # Display results - FULL WIDTH
                     display_pages_results(pages_results)
                     
                 except Exception as e:
@@ -1548,7 +1513,446 @@ def page_performance_analysis():
     else:
         st.info("📤 Please upload a Semrush Pages file to begin analysis")
 
-def validate_pages_data(df):
+def gsc_page_analysis():
+    """Google Search Console Pages Analysis"""
+    
+    with st.container():
+        st.markdown("### 📊 Google Search Console Analysis Overview")
+        
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.markdown("""
+            This analysis examines your page performance using GSC data:
+            
+            **🎯 Key Questions Answered:**
+            - Which pages drive the most clicks and impressions?
+            - What are your best and worst performing CTRs by page?
+            - How do your pages perform across different countries?
+            - Which pages have the best average positions?
+            """)
+        
+        with col2:
+            st.info("""
+            **💡 Strategic Value**
+            
+            Shows actual search performance data and geographic distribution of your traffic.
+            """)
+    
+    # File requirements in expandable section
+    with st.expander("📁 **GSC File Requirements**", expanded=False):
+        st.markdown("""
+        **Required Files:** 1 GSC Pages Compare Excel file with multiple sheets
+        
+        | Sheet | Contains | Purpose |
+        |-------|----------|---------|
+        | **Pages** | Page performance data | Clicks, impressions, CTR, position by page |
+        | **Countries** | Geographic data | Traffic distribution by country |
+        
+        **📋 Export Steps:**
+        1. Go to Search Results in Google Search Console
+        2. Set: Date → Compare → Last 3 months vs Same period last year
+        3. Click Pages tab and export
+        4. Add Countries data as additional sheet
+        5. Save as Excel file with multiple sheets
+        """)
+    
+    st.markdown("---")
+    
+    # File upload section
+    st.markdown("### 📤 Upload GSC Pages Data")
+    
+    gsc_pages_file = st.file_uploader(
+        "Upload GSC Pages Compare Excel file",
+        type=['xlsx', 'xls'],
+        key="gsc_pages_file",
+        help="Excel file with Pages and Countries sheets"
+    )
+    
+    # Process file if uploaded
+    if gsc_pages_file is not None:
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            run_gsc_analysis = st.button("🚀 Run GSC Analysis", key="run_gsc_pages", type="primary", use_container_width=True)
+        
+        if run_gsc_analysis:
+            with st.spinner("🔄 Analyzing GSC page performance..."):
+                try:
+                    # Read Excel file with multiple sheets
+                    pages_df, countries_df = read_gsc_excel_file(gsc_pages_file)
+                    
+                    # Validate data
+                    validation_passed, validation_message = validate_gsc_pages_data(pages_df)
+                    
+                    if not validation_passed:
+                        st.error(validation_message)
+                        st.stop()
+                    
+                    # Perform analysis
+                    gsc_results = analyze_gsc_page_performance(pages_df, countries_df)
+                    
+                    # Display results
+                    display_gsc_results(gsc_results)
+                    
+                except Exception as e:
+                    st.error(f"❌ Error processing file: {str(e)}")
+                    st.info("💡 Please ensure you've uploaded a valid GSC Excel file with Pages and Countries sheets")
+    else:
+        st.info("📤 Please upload a GSC Pages Excel file to begin analysis")
+
+def read_gsc_excel_file(uploaded_file):
+    """Read GSC Excel file with Pages and Countries sheets"""
+    
+    try:
+        # Read the Pages sheet (sheet 2, index 1)
+        pages_df = pd.read_excel(uploaded_file, sheet_name=1)  # Sheet 2
+        pages_df = normalize_columns(pages_df)
+    except:
+        # Fallback - try by name
+        try:
+            pages_df = pd.read_excel(uploaded_file, sheet_name='Pages')
+            pages_df = normalize_columns(pages_df)
+        except:
+            raise ValueError("Could not find Pages sheet in Excel file")
+    
+    try:
+        # Read the Countries sheet (sheet 3, index 2)
+        countries_df = pd.read_excel(uploaded_file, sheet_name=2)  # Sheet 3
+        countries_df = normalize_columns(countries_df)
+    except:
+        # Fallback - try by name
+        try:
+            countries_df = pd.read_excel(uploaded_file, sheet_name='Countries')
+            countries_df = normalize_columns(countries_df)
+        except:
+            st.warning("Could not find Countries sheet - map will be skipped")
+            countries_df = pd.DataFrame()
+    
+    return pages_df, countries_df
+
+def validate_gsc_pages_data(df):
+    """Validate GSC Pages data"""
+    
+    # Look for typical GSC columns
+    page_col = find_column(df.columns, ['top pages', 'page', 'url'])
+    clicks_col = find_column(df.columns, ['clicks'])
+    
+    missing_columns = []
+    if not page_col:
+        missing_columns.append('Page/URL')
+    if not clicks_col:
+        missing_columns.append('Clicks')
+    
+    if missing_columns:
+        return False, f"❌ Missing required columns: {missing_columns}. Available columns: {list(df.columns)[:10]}"
+    
+    if len(df) == 0:
+        return False, "❌ File appears to be empty"
+    
+    return True, "✅ Data validation passed"
+
+def analyze_gsc_page_performance(pages_df, countries_df):
+    """Analyze GSC page performance data"""
+    
+    # Find columns
+    page_col = find_column(pages_df.columns, ['top pages', 'page', 'url'])
+    clicks_now_col = find_column(pages_df.columns, ['last 3 months clicks', 'clicks'])
+    clicks_prev_col = find_column(pages_df.columns, ['previous 3 months clicks', 'same period last year clicks'])
+    impr_now_col = find_column(pages_df.columns, ['last 3 months impressions', 'impressions'])
+    impr_prev_col = find_column(pages_df.columns, ['previous 3 months impressions', 'same period last year impressions'])
+    ctr_now_col = find_column(pages_df.columns, ['last 3 months ctr', 'ctr'])
+    position_col = find_column(pages_df.columns, ['position'])
+    
+    # Build working dataframe
+    work_df = pd.DataFrame()
+    work_df['Page'] = pages_df[page_col].astype(str).str.strip()
+    work_df['Clicks_Now'] = pd.to_numeric(pages_df[clicks_now_col], errors='coerce') if clicks_now_col else 0
+    work_df['Clicks_Prev'] = pd.to_numeric(pages_df[clicks_prev_col], errors='coerce') if clicks_prev_col else 0
+    work_df['Impr_Now'] = pd.to_numeric(pages_df[impr_now_col], errors='coerce') if impr_now_col else 0
+    work_df['Impr_Prev'] = pd.to_numeric(pages_df[impr_prev_col], errors='coerce') if impr_prev_col else 0
+    
+    if ctr_now_col:
+        ctr_series = pages_df[ctr_now_col]
+        if ctr_series.astype(str).str.contains('%').any():
+            work_df['CTR_Now'] = pd.to_numeric(ctr_series.astype(str).str.replace('%', ''), errors='coerce')
+        else:
+            ctr_numeric = pd.to_numeric(ctr_series, errors='coerce')
+            work_df['CTR_Now'] = ctr_numeric * 100 if ctr_numeric.max() <= 1.0 else ctr_numeric
+    else:
+        work_df['CTR_Now'] = np.where(work_df['Impr_Now'] > 0, work_df['Clicks_Now'] / work_df['Impr_Now'] * 100, 0)
+    
+    if position_col:
+        work_df['Position'] = pd.to_numeric(pages_df[position_col], errors='coerce')
+    else:
+        work_df['Position'] = np.nan
+    
+    # Calculate changes
+    work_df['Clicks_Delta'] = work_df['Clicks_Now'] - work_df['Clicks_Prev']
+    work_df['Impr_Delta'] = work_df['Impr_Now'] - work_df['Impr_Prev']
+    work_df['Clicks_Pct_Change'] = np.where(work_df['Clicks_Prev'] > 0, 
+                                           work_df['Clicks_Delta'] / work_df['Clicks_Prev'] * 100, 0)
+    
+    # Clean and sort
+    work_df = work_df[work_df['Page'].notna() & work_df['Page'].ne('')].copy()
+    work_df = work_df.sort_values('Clicks_Now', ascending=False).reset_index(drop=True)
+    
+    # Top performers
+    top_pages_by_clicks = work_df.head(25)
+    top_ctr_pages = work_df[work_df['CTR_Now'] > 0].sort_values('CTR_Now', ascending=False).head(25)
+    biggest_gainers = work_df.sort_values('Clicks_Delta', ascending=False).head(20)
+    biggest_losers = work_df.sort_values('Clicks_Delta', ascending=True).head(20)
+    
+    # Countries analysis
+    countries_analysis = None
+    if not countries_df.empty:
+        try:
+            countries_analysis = analyze_countries_data(countries_df)
+        except:
+            countries_analysis = None
+    
+    return {
+        'total_pages': len(work_df),
+        'total_clicks_now': work_df['Clicks_Now'].sum(),
+        'total_clicks_prev': work_df['Clicks_Prev'].sum(),
+        'total_clicks_delta': work_df['Clicks_Delta'].sum(),
+        'avg_ctr': work_df['CTR_Now'].mean(),
+        'top_pages_by_clicks': top_pages_by_clicks,
+        'top_ctr_pages': top_ctr_pages,
+        'biggest_gainers': biggest_gainers,
+        'biggest_losers': biggest_losers,
+        'countries_analysis': countries_analysis,
+        'raw_data': work_df
+    }
+
+def analyze_countries_data(countries_df):
+    """Analyze countries data for mapping"""
+    
+    # Find columns
+    country_col = find_column(countries_df.columns, ['country', 'countries'])
+    clicks_col = find_column(countries_df.columns, ['clicks'])
+    impr_col = find_column(countries_df.columns, ['impressions'])
+    
+    if not country_col or not clicks_col:
+        return None
+    
+    # Build countries dataframe
+    countries_work = pd.DataFrame()
+    countries_work['Country'] = countries_df[country_col].astype(str).str.strip()
+    countries_work['Clicks'] = pd.to_numeric(countries_df[clicks_col], errors='coerce')
+    
+    if impr_col:
+        countries_work['Impressions'] = pd.to_numeric(countries_df[impr_col], errors='coerce')
+        countries_work['CTR'] = np.where(countries_work['Impressions'] > 0, 
+                                        countries_work['Clicks'] / countries_work['Impressions'] * 100, 0)
+    
+    # Clean and sort
+    countries_work = countries_work[countries_work['Country'].notna() & (countries_work['Clicks'] > 0)].copy()
+    countries_work = countries_work.sort_values('Clicks', ascending=False)
+    
+    return countries_work
+
+def display_gsc_results(results):
+    """Display GSC page performance results"""
+    
+    # Key metrics
+    st.markdown('<div class="section-header">📈 GSC Page Performance Summary</div>', unsafe_allow_html=True)
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric(
+            label="Total Pages",
+            value=f"{results['total_pages']:,}"
+        )
+    
+    with col2:
+        delta_color = "normal" if results['total_clicks_delta'] >= 0 else "inverse"
+        st.metric(
+            label="Total Clicks Change",
+            value=f"{results['total_clicks_delta']:,}",
+            delta=f"{((results['total_clicks_delta'] / results['total_clicks_prev']) * 100) if results['total_clicks_prev'] > 0 else 0:+.1f}%",
+            delta_color=delta_color
+        )
+    
+    with col3:
+        st.metric(
+            label="Current Total Clicks",
+            value=f"{results['total_clicks_now']:,}"
+        )
+    
+    with col4:
+        st.metric(
+            label="Average CTR",
+            value=f"{results['avg_ctr']:.2f}%",
+            help="Average click-through rate across all pages"
+        )
+    
+    # Top Pages Analysis
+    st.markdown('<div class="section-header">🏆 Top Performing Pages</div>', unsafe_allow_html=True)
+    
+    # Use tabs for different views
+    clicks_tab, ctr_tab, gainers_tab, losers_tab = st.tabs(["📊 By Clicks", "🎯 By CTR", "📈 Biggest Gainers", "📉 Biggest Losers"])
+    
+    with clicks_tab:
+        st.markdown("**Pages with highest current click volume**")
+        display_cols = ['Page', 'Clicks_Now', 'Impr_Now', 'CTR_Now']
+        if 'Position' in results['top_pages_by_clicks'].columns:
+            display_cols.append('Position')
+        
+        display_df = results['top_pages_by_clicks'][display_cols].copy()
+        display_df.columns = ['Page', 'Clicks', 'Impressions', 'CTR %'] + (['Avg Position'] if len(display_cols) > 4 else [])
+        st.dataframe(display_df, use_container_width=True, hide_index=True, height=400)
+    
+    with ctr_tab:
+        st.markdown("**Pages with highest click-through rates**")
+        if not results['top_ctr_pages'].empty:
+            display_cols = ['Page', 'Clicks_Now', 'CTR_Now']
+            if 'Position' in results['top_ctr_pages'].columns:
+                display_cols.append('Position')
+            
+            display_df = results['top_ctr_pages'][display_cols].copy()
+            display_df.columns = ['Page', 'Clicks', 'CTR %'] + (['Avg Position'] if len(display_cols) > 3 else [])
+            st.dataframe(display_df, use_container_width=True, hide_index=True, height=400)
+        else:
+            st.info("No CTR data available")
+    
+    with gainers_tab:
+        st.markdown("**Pages with biggest click increases**")
+        display_cols = ['Page', 'Clicks_Prev', 'Clicks_Now', 'Clicks_Delta', 'Clicks_Pct_Change']
+        display_df = results['biggest_gainers'][display_cols].copy()
+        display_df.columns = ['Page', 'Previous Clicks', 'Current Clicks', 'Clicks Δ', 'Change %']
+        st.dataframe(display_df, use_container_width=True, hide_index=True, height=400)
+    
+    with losers_tab:
+        st.markdown("**Pages with biggest click decreases**")
+        display_cols = ['Page', 'Clicks_Prev', 'Clicks_Now', 'Clicks_Delta', 'Clicks_Pct_Change']
+        display_df = results['biggest_losers'][display_cols].copy()
+        display_df.columns = ['Page', 'Previous Clicks', 'Current Clicks', 'Clicks Δ', 'Change %']
+        st.dataframe(display_df, use_container_width=True, hide_index=True, height=400)
+    
+    # Countries Map (if available)
+    if results['countries_analysis'] is not None and not results['countries_analysis'].empty:
+        st.markdown('<div class="section-header">🗺️ Geographic Performance</div>', unsafe_allow_html=True)
+        
+        countries_data = results['countries_analysis']
+        
+        # Create world map
+        fig_map = go.Figure(data=go.Choropleth(
+            locations=countries_data['Country'],
+            z=countries_data['Clicks'],
+            locationmode='country names',
+            colorscale='Blues',
+            autocolorscale=False,
+            text=countries_data['Country'],
+            marker_line_color='darkgray',
+            marker_line_width=0.5,
+            colorbar_title="Clicks"
+        ))
+        
+        fig_map.update_layout(
+            title=dict(text='Click Distribution by Country', font=dict(size=20)),
+            geo=dict(
+                showframe=False,
+                showcoastlines=True,
+                projection_type='equirectangular'
+            ),
+            height=500,
+            margin=dict(l=20, r=20, t=60, b=20)
+        )
+        
+        st.plotly_chart(fig_map, use_container_width=True, config={'displayModeBar': False})
+        
+        # Countries table
+        st.markdown("**Top Countries by Clicks**")
+        countries_display = countries_data.head(15).copy()
+        if 'CTR' in countries_display.columns:
+            countries_display['CTR'] = countries_display['CTR'].round(2)
+        st.dataframe(countries_display, use_container_width=True, hide_index=True, height=300)
+    
+    # Download section
+    st.markdown('<div class="section-header">📥 Download GSC Results</div>', unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        gsc_report = create_gsc_summary_report(results)
+        st.download_button(
+            label="📄 Download GSC Analysis Report",
+            data=gsc_report,
+            file_name=f"gsc_page_analysis_{datetime.now().strftime('%Y%m%d')}.txt",
+            mime="text/plain"
+        )
+    
+    with col2:
+        csv_buffer = io.StringIO()
+        results['raw_data'].to_csv(csv_buffer, index=False)
+        
+        st.download_button(
+            label="📊 Download GSC Data (CSV)",
+            data=csv_buffer.getvalue(),
+            file_name=f"gsc_page_data_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv"
+        )
+
+def create_gsc_summary_report(results):
+    """Create downloadable GSC analysis report"""
+    
+    clicks_change_pct = (results['total_clicks_delta'] / results['total_clicks_prev'] * 100) if results['total_clicks_prev'] > 0 else 0
+    
+    report = f"""
+GSC PAGE PERFORMANCE ANALYSIS REPORT
+Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+===========================================
+EXECUTIVE SUMMARY
+===========================================
+
+Total Pages Analyzed: {results['total_pages']:,}
+Total Clicks Change: {results['total_clicks_delta']:,} ({clicks_change_pct:+.1f}%)
+Current Total Clicks: {results['total_clicks_now']:,}
+Average CTR: {results['avg_ctr']:.2f}%
+
+===========================================
+TOP PAGES BY CLICKS
+===========================================
+
+"""
+    
+    for _, row in results['top_pages_by_clicks'].head(15).iterrows():
+        position_info = f" | Avg Pos: {row['Position']:.1f}" if 'Position' in row and pd.notna(row['Position']) else ""
+        report += f"• {row['Page']} | {row['Clicks_Now']:.0f} clicks | CTR: {row['CTR_Now']:.2f}%{position_info}\n"
+    
+    report += f"""
+
+===========================================
+BIGGEST CLICK GAINERS
+===========================================
+
+"""
+    
+    for _, row in results['biggest_gainers'].head(10).iterrows():
+        report += f"• {row['Page']} | +{row['Clicks_Delta']:.0f} clicks ({row['Clicks_Pct_Change']:+.1f}%)\n"
+    
+    if results['countries_analysis'] is not None and not results['countries_analysis'].empty:
+        report += f"""
+
+===========================================
+TOP COUNTRIES BY CLICKS
+===========================================
+
+"""
+        
+        for _, row in results['countries_analysis'].head(10).iterrows():
+            ctr_info = f" | CTR: {row['CTR']:.2f}%" if 'CTR' in row and pd.notna(row['CTR']) else ""
+            report += f"• {row['Country']} | {row['Clicks']:.0f} clicks{ctr_info}\n"
+    
+    report += f"""
+
+===========================================
+"""
+    
+    return report
+
+def competitor_analysis():
     """Validate the Semrush Pages data"""
     
     # Find columns using flexible matching
