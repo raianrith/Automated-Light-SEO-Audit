@@ -210,40 +210,80 @@ def find_column(columns, patterns):
 def keyword_visibility_analysis():
     st.markdown('<div class="section-header">🔍 Keyword Visibility Trends (Year-over-Year)</div>', unsafe_allow_html=True)
     
-    # Instructions
-    st.markdown("""
-    <div class="instruction-box">
-        <h4>📋 What This Section Analyzes:</h4>
-        <p>This analysis compares your keyword rankings between two time periods (typically current year vs last year) to understand:</p>
-        <ul>
-            <li><b>Total keyword footprint changes</b> - Are you ranking for more or fewer keywords?</li>
-            <li><b>Ranking quality distribution</b> - What percentage of keywords are in top positions?</li>
-            <li><b>Strategic insights</b> - Whether you're gaining authority or losing visibility breadth</li>
-        </ul>
+    # Modern instruction design using containers and columns
+    with st.container():
+        st.markdown("### 📊 Analysis Overview")
         
-        <h4>📁 Required Files:</h4>
-        <p>You need <b>2 Semrush Positions CSV files</b>:</p>
-        <ol>
-            <li><b>Current Period:</b> Recent Semrush Positions export (current month)</li>
-            <li><b>Previous Period:</b> Same month from previous year (for YoY comparison)</li>
-        </ol>
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.markdown("""
+            This analysis compares your keyword rankings between two time periods to understand:
+            
+            **🎯 Key Questions Answered:**
+            - Are you ranking for more or fewer keywords?
+            - What percentage of keywords are in top positions? 
+            - Are you gaining authority or losing visibility breadth?
+            """)
         
-        <h4>🎯 Key Insights You'll Get:</h4>
-        <ul>
-            <li>Total keywords change (Δ and %)</li>
-            <li>Ranking distribution by position buckets</li>
-            <li>Quality vs quantity analysis</li>
-            <li>Strategic recommendations</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
+        with col2:
+            st.info("""
+            **💡 Strategic Value**
+            
+            Identifies whether you're building stronger authority or need to expand your keyword footprint.
+            """)
+    
+    # File requirements in expandable section
+    with st.expander("📁 **File Requirements & Setup**", expanded=False):
+        st.markdown("""
+        **Required Files:** 2 Semrush Positions exports
+        
+        | File | Description | Export From |
+        |------|-------------|-------------|
+        | **Current Period** | Recent month Semrush Positions | Domain Analytics → Organic Research → Positions |
+        | **Previous Period** | Same month last year | Same location, different date |
+        
+        **📋 Export Settings:**
+        - Database: United States (or your target country)
+        - Device: Desktop 
+        - Format: CSV or Excel
+        - Date: Current month vs Same month last year
+        """)
+    
+    # Key insights preview
+    st.markdown("### 🎯 Analysis Insights You'll Get")
+    
+    insight_col1, insight_col2, insight_col3 = st.columns(3)
+    
+    with insight_col1:
+        st.markdown("""
+        **📈 Total Keywords**
+        - Year-over-year change
+        - Growth vs decline analysis
+        """)
+    
+    with insight_col2:
+        st.markdown("""
+        **🏆 Ranking Quality**
+        - Top 3, 4-10, 11-20, 21+ distribution
+        - Quality vs quantity trade-offs
+        """)
+    
+    with insight_col3:
+        st.markdown("""
+        **💡 Strategic Recommendations**
+        - Authority building opportunities
+        - Breadth expansion needs
+        """)
+    
+    st.markdown("---")
     
     # File upload section
-    st.markdown('<div class="file-upload-section">', unsafe_allow_html=True)
+    st.markdown("### 📤 Upload Your Data Files")
+    
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("#### 📤 Current Period (2024/2025)")
+        st.markdown("#### 📊 Current Period (2024/2025)")
         current_file = st.file_uploader(
             "Upload current Semrush Positions file",
             type=['csv', 'xlsx', 'xls'],
@@ -252,15 +292,13 @@ def keyword_visibility_analysis():
         )
         
     with col2:
-        st.markdown("#### 📤 Previous Period (Same Month Last Year)")
+        st.markdown("#### 📊 Previous Period (Same Month Last Year)")
         previous_file = st.file_uploader(
             "Upload previous year Semrush Positions file", 
             type=['csv', 'xlsx', 'xls'],
             key="previous_positions",
             help="Same export but for the corresponding month last year (CSV or Excel format)"
         )
-    
-    st.markdown('</div>', unsafe_allow_html=True)
     
     # Process files if both are uploaded
     if current_file is not None and previous_file is not None:
@@ -281,7 +319,7 @@ def keyword_visibility_analysis():
                     validation_passed, validation_message = validate_positions_data(current_df, previous_df)
                     
                     if not validation_passed:
-                        st.markdown(f'<div class="warning-box">{validation_message}</div>', unsafe_allow_html=True)
+                        st.error(validation_message)
                         st.stop()
                     
                     # Perform analysis
@@ -844,47 +882,84 @@ def keyword_movement_analysis():
     """Analyze keyword movement distribution from Semrush Position Changes"""
     st.markdown('<div class="section-header">🔄 Keyword Movement Distribution</div>', unsafe_allow_html=True)
     
-    st.markdown("""
-    <div class="instruction-box">
-        <h4>📋 What This Section Analyzes:</h4>
-        <p>This analysis examines how your keyword rankings changed over time to identify:</p>
-        <ul>
-            <li><b>Movement distribution</b> - How many keywords improved, declined, or stayed unchanged</li>
-            <li><b>Top winners and losers</b> - Specific keywords with biggest ranking changes</li>
-            <li><b>Improved:Declined ratio</b> - Overall trend momentum indicator</li>
-            <li><b>Ranking flow analysis</b> - Where keywords moved between ranking buckets</li>
-        </ul>
+    # Modern instruction design using containers and columns
+    with st.container():
+        st.markdown("### 📈 Analysis Overview")
         
-        <h4>📁 Required Files:</h4>
-        <p>You need <b>1 Semrush Position Changes file</b>:</p>
-        <ul>
-            <li><b>Position Changes export</b> from Semrush (last 12 months recommended)</li>
-            <li>Must include: Keyword, Position, Previous Position columns</li>
-            <li>Optional: URL column for additional context</li>
-        </ul>
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.markdown("""
+            This analysis examines how your keyword rankings changed over time to identify:
+            
+            **🎯 Key Questions Answered:**
+            - Which keywords are improving vs declining?
+            - What's your overall momentum (improved:declined ratio)?
+            - Where are keywords flowing between ranking buckets?
+            - Which specific keywords need attention?
+            """)
         
-        <h4>🎯 Key Insights You'll Get:</h4>
-        <ul>
-            <li>Movement distribution with improved:declined ratio</li>
-            <li>Top improving keywords (prioritizing #1 rankings)</li>
-            <li>Top declining keywords requiring attention</li>
-            <li>Ranking flow between position buckets (Top 3, 4-10, etc.)</li>
-            <li>Sources of new top 3 rankings</li>
-        </ul>
+        with col2:
+            st.info("""
+            **💡 Strategic Value**
+            
+            Identifies momentum trends and specific optimization opportunities for your keyword portfolio.
+            """)
+    
+    # File requirements in expandable section
+    with st.expander("📁 **File Requirements & Setup**", expanded=False):
+        st.markdown("""
+        **Required Files:** 1 Semrush Position Changes export
         
-        <h4>🔍 Methodology Note:</h4>
-        <p>This analysis treats <b>Position = 0 as "not ranked"</b> (worst position). This means:</p>
-        <ul>
-            <li>Falling out of rankings (→0) counts as <b>Declined</b></li>
-            <li>Newly ranked keywords (0→#) count as <b>Improved</b></li>
-            <li>Movement calculation excludes artificial cases</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
+        | Setting | Requirement |
+        |---------|-------------|
+        | **Export From** | Organic Research → Position Changes |
+        | **Time Period** | Last 12 months (recommended) |
+        | **Format** | CSV or Excel |
+        | **Must Include** | Keyword, Position, Previous Position |
+        
+        **🔍 Methodology Note:**
+        - Position = 0 treated as "not ranked" (worst position)
+        - Falling out (→0) = Declined, Newly ranked (0→#) = Improved
+        - Movement = Previous Position - Position (positive = improvement)
+        """)
+    
+    # Key insights preview
+    st.markdown("### 🎯 Analysis Insights You'll Get")
+    
+    insight_col1, insight_col2, insight_col3, insight_col4 = st.columns(4)
+    
+    with insight_col1:
+        st.markdown("""
+        **📊 Movement Distribution**
+        - Improved/Declined/Unchanged counts
+        - Overall momentum ratio
+        """)
+    
+    with insight_col2:
+        st.markdown("""
+        **🏆 Top Winners**
+        - Biggest ranking improvements
+        - New #1 rankings priority
+        """)
+    
+    with insight_col3:
+        st.markdown("""
+        **📉 Top Losers**
+        - Keywords needing attention
+        - Decline root cause analysis
+        """)
+    
+    with insight_col4:
+        st.markdown("""
+        **🔄 Bucket Flow**
+        - Ranking tier movements
+        - Sources of elite rankings
+        """)
+    
+    st.markdown("---")
     
     # File upload section
-    st.markdown('<div class="file-upload-section">', unsafe_allow_html=True)
-    st.markdown("#### 📤 Upload Position Changes Data")
+    st.markdown("### 📤 Upload Your Data File")
     
     position_changes_file = st.file_uploader(
         "Upload Semrush Position Changes file",
@@ -892,8 +967,6 @@ def keyword_movement_analysis():
         key="position_changes",
         help="Export from Semrush: Organic Research → Position Changes (CSV or Excel format)"
     )
-    
-    st.markdown('</div>', unsafe_allow_html=True)
     
     # Process file if uploaded
     if position_changes_file is not None:
@@ -913,7 +986,7 @@ def keyword_movement_analysis():
                     validation_passed, validation_message = validate_movement_data(df)
                     
                     if not validation_passed:
-                        st.markdown(f'<div class="warning-box">{validation_message}</div>', unsafe_allow_html=True)
+                        st.error(validation_message)
                         st.stop()
                     
                     # Perform analysis
