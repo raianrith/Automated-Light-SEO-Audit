@@ -20,28 +20,32 @@ st.set_page_config(
 st.markdown("""
 <style>
     .main-header {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #1f77b4;
+        font-size: 2rem;
+        font-weight: 600;
+        color: #2c3e50;
         text-align: center;
         margin-bottom: 2rem;
-        padding: 1rem;
-        background: linear-gradient(90deg, #f0f8ff, #e6f3ff);
-        border-radius: 10px;
-        border-left: 5px solid #1f77b4;
+        padding: 1rem 0;
+        background-color: #f9f9f9;
+        border-radius: 12px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+        letter-spacing: 0.5px;
+    }
+    .main-header span {
+        color: #1f77b4; /* accent color */
     }
     
     .section-header {
-        font-size: 1.8rem;
-        font-weight: bold;
+        font-size: 1.6rem;
+        font-weight: 600;
         color: #2c3e50;
-        margin: 1.5rem 0 1rem 0;
-        padding: 0.5rem;
-        background-color: #f8f9fa;
-        border-radius: 5px;
-        border-left: 4px solid #3498db;
+        margin: 2rem 0 1rem 0;
+        padding-bottom: 0.3rem;
+        border-bottom: 2px solid #3498db; /* subtle accent */
+        letter-spacing: 0.5px;
     }
-    
+
+        
     .instruction-box {
         background-color: #f0f8ff;
         padding: 1rem;
@@ -86,7 +90,7 @@ st.markdown("""
 
 def main():
     # Main header
-    st.markdown('<div class="main-header">🚀 SEO Performance Analyzer</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header">🚀 <span>SEO Performance Analyzer</span></div>', unsafe_allow_html=True)
     
     # Sidebar guide
     with st.sidebar:
@@ -118,15 +122,14 @@ def main():
         """)
     
     # Enhanced tab navigation with more sections
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "📋 Data Export Guide",
         "📊 Visibility Trends", 
         "🔄 Keyword Movement", 
         "📄 Page Performance",
         "🎯 Query Analysis",
         "🏁 Competitor Gaps",
-        "📈 Traffic Attribution", 
-        "🚧 More Soon"
+        "📈 Traffic Attribution (Not Complete)"
     ])
     
     with tab1:
@@ -150,35 +153,6 @@ def main():
     with tab7:
         traffic_attribution_analysis()
         
-    with tab8:
-        st.markdown("""
-        ### 🚀 Future Analysis Modules:
-        
-        **🤖 SERP Features Impact**
-        - AI Overviews presence & inclusion rates
-        - Featured snippets analysis
-        - SERP feature CTR impact
-        
-        **🔧 Technical SEO Health** 
-        - Core Web Vitals tracking
-        - Crawl error analysis
-        - Index coverage insights
-        
-        **📱 Mobile Performance**
-        - Mobile vs desktop rankings
-        - Mobile usability issues
-        - AMP performance analysis
-        
-        **🌍 Local SEO Analysis**
-        - Local pack rankings
-        - GMB performance metrics
-        - Local citation analysis
-        
-        *Each module will include interactive charts, automated insights, and actionable recommendations!*
-        """)
-        
-        st.markdown("---")
-        st.markdown("**💬 Have specific analysis needs? The framework is designed to be extensible!**")
 
 # Helper functions for file processing
 def read_uploaded_file(uploaded_file):
@@ -658,22 +632,33 @@ def generate_visibility_insights(results):
 
 def data_export_instructions():
     """Comprehensive guide for exporting data from various SEO tools"""
-    st.markdown('<div class="section-header">📋 Data Export Guide</div>', unsafe_allow_html=True)
-    
-    st.markdown("""
-    <div class="instruction-box">
-        <h4>🎯 Quick Reference</h4>
-        <p>This guide provides step-by-step instructions for exporting data from <b>Semrush</b>, <b>Google Search Console</b>, and <b>GA4</b>. Follow these instructions to get the exact files needed for each analysis section.</p>
-        
-        <h4>🔑 Key Rules</h4>
-        <ul>
-            <li><b>Always export CSV or Excel format</b> - Never PDF</li>
-            <li><b>Use consistent naming:</b> client_tool_report_period.csv</li>
-            <li><b>Same date ranges</b> across all exports for accuracy</li>
-            <li><b>Year-over-year comparisons</b> should use same month from previous year</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
+
+    st.markdown("### 📋 Data Export Guide")
+    st.caption(
+        "Step-by-step instructions for exporting the exact files you’ll need from **Semrush**, **Google Search Console**, and **GA4**."
+    )
+
+    st.markdown(
+        """
+        <div style="
+            background-color:#f9f9f9;
+            border:1px solid #e6e6e6;
+            border-radius:12px;
+            padding:18px;
+        ">
+            <h4 style="margin-top:0;">🎯 Quick Reference</h4>
+            <p style="margin-bottom:0;">
+                • Export files in <b>CSV</b> or <b>Excel</b> format (never PDF).<br>
+                • Use consistent naming: <code>client_tool_report_period.csv</code><br>
+                • Keep date ranges consistent across all exports.<br>
+                • For year-over-year, compare the same month from the previous year.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.markdown("<div style='margin-top:30px;'></div>", unsafe_allow_html=True)
     
     # Create expandable sections for each tool
     with st.expander("🔍 **Semrush Exports** - Keyword Rankings & Competition Data", expanded=True):
@@ -2002,26 +1987,173 @@ TOP COUNTRIES BY CLICKS
     return report
 
 def competitor_analysis():
-    """Validate the Semrush Pages data"""
+    """Analyze competitor rankings and gaps"""
+    st.markdown('<div class="section-header">🏁 Competitor Gap Analysis</div>', unsafe_allow_html=True)
     
-    # Find columns using flexible matching
-    url_col = find_column(df.columns, ['url', 'page', 'landing page'])
-    traffic_col = find_column(df.columns, ['traffic'])
+    # Modern instruction design
+    with st.container():
+        st.markdown("### 📊 Analysis Overview")
+        
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.markdown("""
+            This analysis examines your competitive landscape to understand:
+            
+            **🎯 Key Questions Answered:**
+            - Who are your real search competitors (not just business rivals)?
+            - Where do competitors consistently outrank you?
+            - Which of your declining keywords show competitive pressure?
+            - What specific keyword gaps present opportunities?
+            """)
+        
+        with col2:
+            st.info("""
+            **💡 Strategic Value**
+            
+            Identifies the domains shaping your SERPs and reveals specific keyword opportunities to target.
+            """)
     
-    missing_columns = []
-    if not url_col:
-        missing_columns.append('URL/Page')
-    if not traffic_col:
-        missing_columns.append('Traffic')
+    # File requirements in expandable section
+    with st.expander("📁 **File Requirements & Setup**", expanded=False):
+        st.markdown("""
+        **Required Files:** 2 files minimum, 3+ for detailed analysis
+        
+        | File | Purpose | Export From |
+        |------|---------|-------------|
+        | **Semrush Competitors** | Identify top competitors | Organic Research → Competitors |
+        | **Your Positions (current)** | Your current rankings | Organic Research → Positions |
+        | **Competitor Positions** | Optional: Detailed gaps | Individual competitor Position exports |
+        
+        **📋 Export Steps:**
+        1. **Competitors**: Export from Competitors tab (shows relevance & overlap)
+        2. **Your Positions**: Current month positions export  
+        3. **Optional**: Export positions for top 3-5 competitors individually
+        
+        **🔍 Analysis Method:**
+        - Identifies top competitors by relevance/keyword overlap
+        - Counts where each competitor outranks you
+        - Shows specific keyword gap opportunities
+        - Focuses on competitive pressure for declining queries
+        """)
     
-    if missing_columns:
-        return False, f"❌ Missing required columns: {missing_columns}. Available columns: {list(df.columns)[:10]}"
+    # Key insights preview
+    st.markdown("### 🎯 Analysis Insights You'll Get")
     
-    # Check if data is not empty
-    if len(df) == 0:
-        return False, "❌ File appears to be empty"
+    insight_col1, insight_col2, insight_col3, insight_col4 = st.columns(4)
     
-    return True, "✅ Data validation passed"
+    with insight_col1:
+        st.markdown("""
+        **🥇 Top Competitors**
+        - Real search competitors by relevance
+        - Keyword overlap analysis
+        """)
+    
+    with insight_col2:
+        st.markdown("""
+        **📊 Outrank Counts**
+        - Where competitors beat you
+        - Win/loss ratios by competitor
+        """)
+    
+    with insight_col3:
+        st.markdown("""
+        **🎯 Gap Opportunities**
+        - Specific keywords to target
+        - Competitive displacement analysis
+        """)
+    
+    with insight_col4:
+        st.markdown("""
+        **📉 Pressure Analysis**
+        - Competitors affecting declining queries
+        - Strategic counter-moves
+        """)
+    
+    st.markdown("---")
+    
+    # File upload section
+    st.markdown("### 📤 Upload Your Data Files")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("#### 🏆 Semrush Competitors (Required)")
+        competitors_file = st.file_uploader(
+            "Upload Semrush Competitors file",
+            type=['csv', 'xlsx', 'xls'],
+            key="competitors_file",
+            help="Export from Semrush: Organic Research → Competitors"
+        )
+        
+    with col2:
+        st.markdown("#### 📊 Your Positions (Required)")
+        your_positions_file = st.file_uploader(
+            "Upload Your Semrush Positions file",
+            type=['csv', 'xlsx', 'xls'],
+            key="your_positions_file",
+            help="Export from Semrush: Organic Research → Positions (current)"
+        )
+    
+    # Optional competitor positions
+    st.markdown("#### 🎯 Competitor Positions (Optional - for detailed gap analysis)")
+    competitor_positions_files = st.file_uploader(
+        "Upload competitor position files (one per competitor)",
+        type=['csv', 'xlsx', 'xls'],
+        accept_multiple_files=True,
+        key="competitor_positions_files",
+        help="Optional: Individual position exports for top competitors"
+    )
+    
+    # Process files if minimum required files uploaded
+    if competitors_file is not None and your_positions_file is not None:
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            run_competitor_analysis = st.button("🚀 Run Competitor Analysis", key="run_competitors", type="primary", use_container_width=True)
+        
+        if run_competitor_analysis:
+            with st.spinner("🔄 Analyzing competitive landscape..."):
+                try:
+                    # Load main files
+                    competitors_df = normalize_columns(read_uploaded_file(competitors_file))
+                    your_positions_df = normalize_columns(read_uploaded_file(your_positions_file))
+                    
+                    # Load optional competitor files
+                    competitor_data = {}
+                    if competitor_positions_files:
+                        for comp_file in competitor_positions_files:
+                            try:
+                                comp_df = normalize_columns(read_uploaded_file(comp_file))
+                                # Try to infer domain from filename or data
+                                domain = infer_competitor_domain(comp_file.name, comp_df)
+                                if domain:
+                                    competitor_data[domain] = comp_df
+                            except Exception as e:
+                                st.warning(f"Could not process {comp_file.name}: {str(e)}")
+                    
+                    # Validate data
+                    validation_passed, validation_message = validate_competitor_data(competitors_df, your_positions_df)
+                    
+                    if not validation_passed:
+                        st.error(validation_message)
+                        st.stop()
+                    
+                    # Perform analysis
+                    competitor_results = analyze_competitor_gaps(competitors_df, your_positions_df, competitor_data)
+                    
+                    # Display results
+                    display_competitor_results(competitor_results)
+                    
+                except Exception as e:
+                    st.error(f"❌ Error processing files: {str(e)}")
+                    st.info("💡 Please ensure you've uploaded valid Semrush files")
+    else:
+        missing = []
+        if competitors_file is None:
+            missing.append("Competitors file")
+        if your_positions_file is None:
+            missing.append("Your Positions file")
+        st.info(f"📤 Please upload: {', '.join(missing)}")
+
 
 def analyze_page_performance(df):
     """Analyze page performance patterns following the prototype methodology"""
@@ -3986,6 +4118,638 @@ RECOMMENDATIONS
 
 ===========================================
 """
+    return report
+
+def traffic_attribution_analysis():
+    """Analyze sitewide traffic attribution from GSC and GA4"""
+    st.markdown('<div class="section-header">📈 Traffic Attribution Analysis</div>', unsafe_allow_html=True)
+    
+    # Modern instruction design
+    with st.container():
+        st.markdown("### 📊 Analysis Overview")
+        
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.markdown("""
+            This analysis examines your overall organic performance to understand:
+            
+            **🎯 Key Questions Answered:**
+            - How have sitewide clicks and impressions changed year-over-year?
+            - Is declining traffic due to position drops or CTR pressure?
+            - What's the weighted CTR trend across all keywords?
+            - Do GA4 sessions confirm GSC click changes?
+            """)
+        
+        with col2:
+            st.info("""
+            **💡 Strategic Value**
+            
+            Separates demand growth from execution issues to identify the root cause of traffic changes.
+            """)
+    
+    # File requirements in expandable section
+    with st.expander("📁 **File Requirements & Setup**", expanded=False):
+        st.markdown("""
+        **Required Files:** 1-2 files for comprehensive analysis
+        
+        | File | Purpose | Export From |
+        |------|---------|-------------|
+        | **GSC Search Results Compare** | Primary sitewide analysis | Search Console → Search Results (Compare view) |
+        | **GA4 Traffic Acquisition** | Optional validation | Reports → Acquisition → Traffic Acquisition |
+        
+        **📋 GSC Export Steps:**
+        1. Go to Search Results in Google Search Console
+        2. Set: Search type = Web
+        3. Set: Date → Compare → Last 3 months vs Same period last year
+        4. Export → CSV or Excel (main Search Results tab)
+        
+        **📋 GA4 Export Steps (Optional):**
+        1. Reports → Acquisition → Traffic acquisition
+        2. Same date range as GSC
+        3. Filter: Session default channel group = "Organic Search"
+        4. Share report → Download CSV
+        """)
+    
+    # Key insights preview
+    st.markdown("### 🎯 Analysis Insights You'll Get")
+    
+    insight_col1, insight_col2, insight_col3, insight_col4 = st.columns(4)
+    
+    with insight_col1:
+        st.markdown("""
+        **📊 Sitewide Performance**
+        - Total clicks/impressions YoY
+        - Performance trend diagnosis
+        """)
+    
+    with insight_col2:
+        st.markdown("""
+        **🎯 CTR Analysis**
+        - Weighted click-through rate
+        - CTR pressure identification
+        """)
+    
+    with insight_col3:
+        st.markdown("""
+        **📍 Position Context**
+        - Average position changes
+        - Ranking impact assessment
+        """)
+    
+    with insight_col4:
+        st.markdown("""
+        **✅ GA4 Validation**
+        - Session impact confirmation
+        - Business impact sizing
+        """)
+    
+    st.markdown("---")
+    
+    # File upload section
+    st.markdown("### 📤 Upload Your Data Files")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("#### 📊 GSC Search Results Compare (Required)")
+        gsc_search_file = st.file_uploader(
+            "Upload GSC Search Results Compare file",
+            type=['csv', 'xlsx', 'xls'],
+            key="gsc_search_compare",
+            help="Export from GSC: Search Results → Compare view (sitewide data)"
+        )
+        
+    with col2:
+        st.markdown("#### 📊 GA4 Traffic Acquisition (Optional)")
+        ga4_traffic_file = st.file_uploader(
+            "Upload GA4 Traffic Acquisition file",
+            type=['csv', 'xlsx', 'xls'],
+            key="ga4_traffic_file",
+            help="Optional: Validates organic search session impact"
+        )
+    
+    # Process files if main file uploaded
+    if gsc_search_file is not None:
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            run_attribution_analysis = st.button("🚀 Run Attribution Analysis", key="run_attribution", type="primary", use_container_width=True)
+        
+        if run_attribution_analysis:
+            with st.spinner("🔄 Analyzing traffic attribution..."):
+                try:
+                    # Load and validate data
+                    gsc_df = normalize_columns(read_uploaded_file(gsc_search_file))
+                    
+                    # Optional GA4 data
+                    ga4_df = None
+                    if ga4_traffic_file is not None:
+                        ga4_df = normalize_columns(read_uploaded_file(ga4_traffic_file))
+                    
+                    # Validate required columns
+                    validation_passed, validation_message = validate_attribution_data(gsc_df)
+                    
+                    if not validation_passed:
+                        st.error(validation_message)
+                        st.stop()
+                    
+                    # Perform analysis
+                    attribution_results = analyze_traffic_attribution(gsc_df, ga4_df)
+                    
+                    # Display results
+                    display_attribution_results(attribution_results)
+                    
+                except Exception as e:
+                    st.error(f"❌ Error processing files: {str(e)}")
+                    st.info("💡 Please ensure you've uploaded valid GSC Search Results Compare file")
+    else:
+        st.info("📤 Please upload a GSC Search Results Compare file to begin analysis")
+
+
+def validate_attribution_data(df):
+    """Validate GSC Search Results Compare data"""
+    
+    # Look for typical GSC sitewide columns
+    clicks_current = find_column(df.columns, ['last 3 months clicks', 'clicks'])
+    clicks_previous = find_column(df.columns, ['previous 3 months clicks', 'same period last year clicks'])
+    impressions_current = find_column(df.columns, ['last 3 months impressions', 'impressions'])
+    impressions_previous = find_column(df.columns, ['previous 3 months impressions', 'same period last year impressions'])
+    
+    missing_columns = []
+    if not clicks_current:
+        missing_columns.append('Current Period Clicks')
+    if not clicks_previous:
+        missing_columns.append('Previous Period Clicks')
+    if not impressions_current:
+        missing_columns.append('Current Period Impressions')
+    if not impressions_previous:
+        missing_columns.append('Previous Period Impressions')
+    
+    if missing_columns:
+        return False, f"❌ Missing required columns: {missing_columns}. Available columns: {list(df.columns)[:10]}"
+    
+    if len(df) == 0:
+        return False, "❌ File appears to be empty"
+    
+    return True, "✅ Data validation passed"
+
+
+def analyze_traffic_attribution(gsc_df, ga4_df=None):
+    """Analyze traffic attribution following the prototype methodology"""
+    
+    # Find GSC columns
+    clicks_now = find_column(gsc_df.columns, ['last 3 months clicks', 'clicks'])
+    clicks_prev = find_column(gsc_df.columns, ['previous 3 months clicks', 'same period last year clicks'])
+    impr_now = find_column(gsc_df.columns, ['last 3 months impressions', 'impressions'])
+    impr_prev = find_column(gsc_df.columns, ['previous 3 months impressions', 'same period last year impressions'])
+    ctr_now = find_column(gsc_df.columns, ['last 3 months ctr', 'ctr'])
+    ctr_prev = find_column(gsc_df.columns, ['previous 3 months ctr', 'same period last year ctr'])
+    pos_now = find_column(gsc_df.columns, ['last 3 months position', 'position'])
+    pos_prev = find_column(gsc_df.columns, ['previous 3 months position', 'same period last year position'])
+    
+    # Calculate sitewide totals
+    total_clicks_now = pd.to_numeric(gsc_df[clicks_now], errors='coerce').sum()
+    total_clicks_prev = pd.to_numeric(gsc_df[clicks_prev], errors='coerce').sum()
+    total_impr_now = pd.to_numeric(gsc_df[impr_now], errors='coerce').sum()
+    total_impr_prev = pd.to_numeric(gsc_df[impr_prev], errors='coerce').sum()
+    
+    # Calculate changes
+    clicks_delta = total_clicks_now - total_clicks_prev
+    clicks_pct_change = (clicks_delta / total_clicks_prev * 100) if total_clicks_prev > 0 else 0
+    impr_delta = total_impr_now - total_impr_prev
+    impr_pct_change = (impr_delta / total_impr_prev * 100) if total_impr_prev > 0 else 0
+    
+    # Calculate weighted CTR
+    weighted_ctr_now = (total_clicks_now / total_impr_now * 100) if total_impr_now > 0 else 0
+    weighted_ctr_prev = (total_clicks_prev / total_impr_prev * 100) if total_impr_prev > 0 else 0
+    ctr_delta_pp = weighted_ctr_now - weighted_ctr_prev
+    
+    # Calculate weighted position if available
+    weighted_pos_now = weighted_pos_prev = pos_delta = None
+    if pos_now and pos_prev:
+        # Weight by impressions for more accurate position
+        pos_now_series = pd.to_numeric(gsc_df[pos_now], errors='coerce')
+        pos_prev_series = pd.to_numeric(gsc_df[pos_prev], errors='coerce')
+        impr_now_series = pd.to_numeric(gsc_df[impr_now], errors='coerce')
+        impr_prev_series = pd.to_numeric(gsc_df[impr_prev], errors='coerce')
+        
+        # Remove rows with missing data
+        valid_now = ~(pos_now_series.isna() | impr_now_series.isna()) & (impr_now_series > 0)
+        valid_prev = ~(pos_prev_series.isna() | impr_prev_series.isna()) & (impr_prev_series > 0)
+        
+        if valid_now.any():
+            weighted_pos_now = (pos_now_series[valid_now] * impr_now_series[valid_now]).sum() / impr_now_series[valid_now].sum()
+        if valid_prev.any():
+            weighted_pos_prev = (pos_prev_series[valid_prev] * impr_prev_series[valid_prev]).sum() / impr_prev_series[valid_prev].sum()
+        
+        if weighted_pos_now and weighted_pos_prev:
+            pos_delta = weighted_pos_now - weighted_pos_prev
+    
+    # Analyze GA4 data if provided
+    ga4_analysis = None
+    if ga4_df is not None:
+        try:
+            ga4_analysis = analyze_ga4_traffic(ga4_df)
+        except Exception as e:
+            st.warning(f"Could not process GA4 data: {str(e)}")
+    
+    # Performance pattern analysis
+    pattern = analyze_performance_pattern(clicks_delta, impr_delta, ctr_delta_pp, pos_delta)
+    
+    return {
+        'total_clicks_now': total_clicks_now,
+        'total_clicks_prev': total_clicks_prev,
+        'clicks_delta': clicks_delta,
+        'clicks_pct_change': clicks_pct_change,
+        'total_impr_now': total_impr_now,
+        'total_impr_prev': total_impr_prev,
+        'impr_delta': impr_delta,
+        'impr_pct_change': impr_pct_change,
+        'weighted_ctr_now': weighted_ctr_now,
+        'weighted_ctr_prev': weighted_ctr_prev,
+        'ctr_delta_pp': ctr_delta_pp,
+        'weighted_pos_now': weighted_pos_now,
+        'weighted_pos_prev': weighted_pos_prev,
+        'pos_delta': pos_delta,
+        'performance_pattern': pattern,
+        'ga4_analysis': ga4_analysis,
+        'raw_data': gsc_df
+    }
+
+
+def analyze_ga4_traffic(ga4_df):
+    """Analyze GA4 organic traffic data for validation"""
+    
+    # Look for organic search data
+    organic_row = None
+    
+    # Try to find organic search row
+    if 'Default channel group' in ga4_df.columns or 'Session default channel group' in ga4_df.columns:
+        channel_col = find_column(ga4_df.columns, ['default channel group', 'session default channel group', 'channel'])
+        if channel_col:
+            organic_mask = ga4_df[channel_col].str.contains('Organic', case=False, na=False)
+            if organic_mask.any():
+                organic_row = ga4_df[organic_mask].iloc[0]
+    
+    if organic_row is None:
+        # If no channel column, assume the data is already filtered to organic
+        organic_row = ga4_df.iloc[0] if len(ga4_df) > 0 else None
+    
+    if organic_row is None:
+        return None
+    
+    # Extract metrics
+    sessions_col = find_column(ga4_df.columns, ['sessions'])
+    users_col = find_column(ga4_df.columns, ['users', 'active users'])
+    engaged_sessions_col = find_column(ga4_df.columns, ['engaged sessions'])
+    events_col = find_column(ga4_df.columns, ['key events', 'conversions', 'events'])
+    
+    analysis = {}
+    
+    if sessions_col:
+        analysis['sessions'] = pd.to_numeric(organic_row[sessions_col], errors='coerce')
+    if users_col:
+        analysis['users'] = pd.to_numeric(organic_row[users_col], errors='coerce')
+    if engaged_sessions_col:
+        analysis['engaged_sessions'] = pd.to_numeric(organic_row[engaged_sessions_col], errors='coerce')
+    if events_col:
+        analysis['key_events'] = pd.to_numeric(organic_row[events_col], errors='coerce')
+    
+    # Calculate engagement rate
+    if 'sessions' in analysis and 'engaged_sessions' in analysis and analysis['sessions'] > 0:
+        analysis['engagement_rate'] = (analysis['engaged_sessions'] / analysis['sessions'] * 100)
+    
+    return analysis
+
+
+def analyze_performance_pattern(clicks_delta, impr_delta, ctr_delta_pp, pos_delta):
+    """Analyze performance pattern to provide insights"""
+    
+    if clicks_delta < 0 and impr_delta > 0:
+        return {
+            'type': 'ctr_pressure',
+            'description': 'CTR Pressure Pattern',
+            'detail': 'Visibility increased but clicks decreased - likely SERP feature or competitive CTR pressure',
+            'color': 'warning',
+            'icon': '⚠️'
+        }
+    elif clicks_delta < 0 and impr_delta < 0:
+        return {
+            'type': 'demand_decline', 
+            'description': 'Demand Decline Pattern',
+            'detail': 'Both clicks and impressions decreased - check rankings, indexing, or seasonality',
+            'color': 'error',
+            'icon': '📉'
+        }
+    elif clicks_delta > 0 and impr_delta > 0:
+        return {
+            'type': 'broad_growth',
+            'description': 'Broad Growth Pattern',
+            'detail': 'Both clicks and impressions increased - strong SEO momentum',
+            'color': 'success',
+            'icon': '📈'
+        }
+    elif clicks_delta > 0 and impr_delta <= 0:
+        return {
+            'type': 'efficiency_gains',
+            'description': 'Efficiency Gains Pattern', 
+            'detail': 'Clicks increased despite flat/declining impressions - improved rankings or CTR',
+            'color': 'success',
+            'icon': '🎯'
+        }
+    else:
+        return {
+            'type': 'stable',
+            'description': 'Stable Performance',
+            'detail': 'Minimal changes in both clicks and impressions',
+            'color': 'info',
+            'icon': '📊'
+        }
+
+
+def display_attribution_results(results):
+    """Display traffic attribution analysis results"""
+    
+    # Performance Pattern Header
+    pattern = results['performance_pattern']
+    st.markdown(f"""
+    <div style="background-color: {'#d4edda' if pattern['color'] == 'success' else '#fff3cd' if pattern['color'] == 'warning' else '#f8d7da' if pattern['color'] == 'error' else '#d1ecf1'}; 
+    padding: 1rem; border-radius: 10px; margin: 1rem 0; border-left: 4px solid {'#28a745' if pattern['color'] == 'success' else '#ffc107' if pattern['color'] == 'warning' else '#dc3545' if pattern['color'] == 'error' else '#17a2b8'};">
+        <h4>{pattern['icon']} {pattern['description']}</h4>
+        <p>{pattern['detail']}</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Key metrics
+    st.markdown('<div class="section-header">📈 Sitewide Performance Summary</div>', unsafe_allow_html=True)
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        delta_color = "normal" if results['clicks_delta'] >= 0 else "inverse"
+        st.metric(
+            label="Total Clicks Change",
+            value=f"{results['clicks_delta']:,}",
+            delta=f"{results['clicks_pct_change']:+.1f}%",
+            delta_color=delta_color
+        )
+    
+    with col2:
+        delta_color = "normal" if results['impr_delta'] >= 0 else "inverse"
+        st.metric(
+            label="Total Impressions Change",
+            value=f"{results['impr_delta']:,}",
+            delta=f"{results['impr_pct_change']:+.1f}%",
+            delta_color=delta_color
+        )
+    
+    with col3:
+        delta_color = "normal" if results['ctr_delta_pp'] >= 0 else "inverse"
+        st.metric(
+            label="Weighted CTR",
+            value=f"{results['weighted_ctr_now']:.2f}%",
+            delta=f"{results['ctr_delta_pp']:+.2f}pp",
+            delta_color=delta_color,
+            help="Site-wide click-through rate (total clicks / total impressions)"
+        )
+    
+    with col4:
+        if results['pos_delta'] is not None:
+            delta_color = "inverse" if results['pos_delta'] > 0 else "normal"  # Lower position is better
+            st.metric(
+                label="Avg Position Change",
+                value=f"{results['weighted_pos_now']:.1f}",
+                delta=f"{results['pos_delta']:+.1f}",
+                delta_color=delta_color,
+                help="Weighted average position across all keywords"
+            )
+        else:
+            st.metric(label="Avg Position", value="N/A", help="Position data not available")
+    
+    # Detailed breakdown
+    st.markdown('<div class="section-header">📊 Detailed Performance Breakdown</div>', unsafe_allow_html=True)
+    
+    # Performance comparison chart
+    metrics = ['Clicks', 'Impressions'] 
+    current_values = [results['total_clicks_now'], results['total_impr_now']]
+    previous_values = [results['total_clicks_prev'], results['total_impr_prev']]
+    
+    fig_comparison = go.Figure()
+    
+    fig_comparison.add_trace(go.Bar(
+        name='Previous Period',
+        x=metrics,
+        y=previous_values,
+        marker_color='lightblue',
+        text=[f"{val:,.0f}" for val in previous_values],
+        textposition='auto'
+    ))
+    
+    fig_comparison.add_trace(go.Bar(
+        name='Current Period',
+        x=metrics,
+        y=current_values,
+        marker_color='darkblue',
+        text=[f"{val:,.0f}" for val in current_values],
+        textposition='auto'
+    ))
+    
+    fig_comparison.update_layout(
+        title=dict(text='Performance Comparison: Current vs Previous Period', font=dict(size=20)),
+        xaxis_title='Metrics',
+        yaxis_title='Volume',
+        barmode='group',
+        height=500,
+        margin=dict(l=60, r=60, t=80, b=60),
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)'
+    )
+    
+    st.plotly_chart(fig_comparison, use_container_width=True, config={'displayModeBar': False})
+    
+    # Performance table
+    performance_table = pd.DataFrame({
+        'Metric': ['Total Clicks', 'Total Impressions', 'Weighted CTR (%)', 'Weighted Position'],
+        'Previous Period': [
+            f"{results['total_clicks_prev']:,.0f}",
+            f"{results['total_impr_prev']:,.0f}", 
+            f"{results['weighted_ctr_prev']:.2f}%",
+            f"{results['weighted_pos_prev']:.1f}" if results['weighted_pos_prev'] else "N/A"
+        ],
+        'Current Period': [
+            f"{results['total_clicks_now']:,.0f}",
+            f"{results['total_impr_now']:,.0f}",
+            f"{results['weighted_ctr_now']:.2f}%", 
+            f"{results['weighted_pos_now']:.1f}" if results['weighted_pos_now'] else "N/A"
+        ],
+        'Change': [
+            f"{results['clicks_delta']:+,.0f} ({results['clicks_pct_change']:+.1f}%)",
+            f"{results['impr_delta']:+,.0f} ({results['impr_pct_change']:+.1f}%)",
+            f"{results['ctr_delta_pp']:+.2f}pp",
+            f"{results['pos_delta']:+.1f}" if results['pos_delta'] else "N/A"
+        ]
+    })
+    
+    st.dataframe(performance_table, use_container_width=True, hide_index=True)
+    
+    # GA4 validation if available
+    if results['ga4_analysis'] is not None:
+        st.markdown('<div class="section-header">✅ GA4 Validation</div>', unsafe_allow_html=True)
+        st.markdown("*Confirming organic search impact in GA4 sessions data*")
+        
+        ga4 = results['ga4_analysis']
+        
+        ga4_col1, ga4_col2, ga4_col3, ga4_col4 = st.columns(4)
+        
+        if 'sessions' in ga4:
+            with ga4_col1:
+                st.metric(label="Organic Sessions", value=f"{ga4['sessions']:,.0f}")
+        
+        if 'users' in ga4:
+            with ga4_col2:
+                st.metric(label="Organic Users", value=f"{ga4['users']:,.0f}")
+        
+        if 'engagement_rate' in ga4:
+            with ga4_col3:
+                st.metric(label="Engagement Rate", value=f"{ga4['engagement_rate']:.1f}%")
+        
+        if 'key_events' in ga4:
+            with ga4_col4:
+                st.metric(label="Key Events", value=f"{ga4['key_events']:,.0f}")
+    
+    # Strategic insights
+    st.markdown('<div class="section-header">💡 Strategic Insights</div>', unsafe_allow_html=True)
+    insights = generate_attribution_insights(results)
+    st.markdown(f'<div class="insight-box">{insights}</div>', unsafe_allow_html=True)
+    
+    # Download section
+    st.markdown('<div class="section-header">📥 Download Results</div>', unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        summary_report = create_attribution_summary_report(results)
+        st.download_button(
+            label="📄 Download Attribution Report",
+            data=summary_report,
+            file_name=f"traffic_attribution_analysis_{datetime.now().strftime('%Y%m%d')}.txt",
+            mime="text/plain"
+        )
+    
+    with col2:
+        csv_buffer = io.StringIO()
+        performance_table.to_csv(csv_buffer, index=False)
+        
+        st.download_button(
+            label="📊 Download Performance Data (CSV)",
+            data=csv_buffer.getvalue(),
+            file_name=f"traffic_attribution_data_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv"
+        )
+
+
+def generate_attribution_insights(results):
+    """Generate strategic insights from traffic attribution analysis"""
+    insights = []
+    
+    pattern = results['performance_pattern']
+    clicks_delta = results['clicks_delta']
+    impr_delta = results['impr_delta']
+    ctr_delta = results['ctr_delta_pp']
+    
+    # Pattern-specific insights
+    if pattern['type'] == 'ctr_pressure':
+        insights.append(f"<b>⚠️ CTR Challenge:</b> With impressions up {results['impr_pct_change']:+.1f}% but clicks down {abs(results['clicks_pct_change']):.1f}%, you're losing click share to SERP features, ads, or competitors. Focus on snippet optimization and competitive analysis.")
+    elif pattern['type'] == 'demand_decline':
+        insights.append(f"<b>📉 Multi-Factor Decline:</b> Both visibility and clicks declined, suggesting broader issues like ranking losses, indexing problems, or seasonal demand shifts. Audit technical SEO and content freshness.")
+    elif pattern['type'] == 'broad_growth':
+        insights.append(f"<b>🚀 Strong Momentum:</b> Both impressions (+{results['impr_pct_change']:.1f}%) and clicks (+{results['clicks_pct_change']:.1f}%) grew - excellent SEO performance. Maintain current strategy and scale successful tactics.")
+    elif pattern['type'] == 'efficiency_gains':
+        insights.append(f"<b>🎯 Optimization Success:</b> Clicks increased {results['clicks_pct_change']:+.1f}% despite flat impressions - you're capturing more clicks from existing visibility through better rankings or CTR.")
+    
+    # CTR analysis
+    if abs(ctr_delta) > 0.5:
+        direction = "improved" if ctr_delta > 0 else "declined"
+        magnitude = "significantly" if abs(ctr_delta) > 1.0 else "moderately"
+        insights.append(f"<b>📊 CTR Trend:</b> Weighted CTR {direction} {magnitude} by {abs(ctr_delta):.2f} percentage points. This {'confirms ranking/snippet improvements' if ctr_delta > 0 else 'suggests SERP competitive pressure'}.")
+    
+    # Position context
+    if results['pos_delta'] is not None:
+        if abs(results['pos_delta']) > 1:
+            direction = "improved" if results['pos_delta'] < 0 else "declined"
+            insights.append(f"<b>📍 Ranking Movement:</b> Average position {direction} by {abs(results['pos_delta']):.1f} positions, {'supporting' if results['pos_delta'] < 0 else 'explaining'} the click performance changes.")
+    
+    # GA4 validation
+    if results['ga4_analysis']:
+        insights.append("<b>✅ GA4 Confirmation:</b> Organic session data confirms the GSC click trends, validating business impact and ruling out tracking discrepancies.")
+    
+    # Action recommendations
+    if pattern['type'] in ['ctr_pressure', 'demand_decline']:
+        insights.append("<b>🎯 Immediate Actions:</b> Prioritize your top declining queries from Query Analysis, refresh high-value content, and audit technical SEO fundamentals.")
+    
+    return "<br><br>".join(insights)
+
+
+def create_attribution_summary_report(results):
+    """Create downloadable traffic attribution report"""
+    
+    report = f"""
+TRAFFIC ATTRIBUTION ANALYSIS REPORT
+Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+===========================================
+EXECUTIVE SUMMARY
+===========================================
+
+Performance Pattern: {results['performance_pattern']['description']}
+{results['performance_pattern']['detail']}
+
+Key Metrics Changes:
+• Total Clicks: {results['clicks_delta']:,} ({results['clicks_pct_change']:+.1f}%)
+• Total Impressions: {results['impr_delta']:,} ({results['impr_pct_change']:+.1f}%)  
+• Weighted CTR: {results['ctr_delta_pp']:+.2f}pp (now {results['weighted_ctr_now']:.2f}%)
+• Weighted Position: {results['pos_delta']:+.1f if results['pos_delta'] else 'N/A'} (now {results['weighted_pos_now']:.1f if results['weighted_pos_now'] else 'N/A'})
+
+===========================================
+DETAILED PERFORMANCE BREAKDOWN
+===========================================
+
+Current Period:
+• Clicks: {results['total_clicks_now']:,.0f}
+• Impressions: {results['total_impr_now']:,.0f}
+• Weighted CTR: {results['weighted_ctr_now']:.2f}%
+• Weighted Position: {results['weighted_pos_now']:.1f if results['weighted_pos_now'] else 'N/A'}
+
+Previous Period:
+• Clicks: {results['total_clicks_prev']:,.0f}  
+• Impressions: {results['total_impr_prev']:,.0f}
+• Weighted CTR: {results['weighted_ctr_prev']:.2f}%
+• Weighted Position: {results['weighted_pos_prev']:.1f if results['weighted_pos_prev'] else 'N/A'}
+
+===========================================
+GA4 VALIDATION DATA
+===========================================
+
+"""
+    
+    if results['ga4_analysis']:
+        ga4 = results['ga4_analysis']
+        for metric, value in ga4.items():
+            if isinstance(value, (int, float)) and not pd.isna(value):
+                report += f"• {metric.replace('_', ' ').title()}: {value:,.0f if metric != 'engagement_rate' else value:.1f}{'%' if metric == 'engagement_rate' else ''}\n"
+    else:
+        report += "GA4 data not provided\n"
+    
+    report += f"""
+
+===========================================
+STRATEGIC INSIGHTS
+===========================================
+
+{generate_attribution_insights(results).replace('<b>', '').replace('</b>', '').replace('<br><br>', '\n\n').replace('⚠️', '• ').replace('📉', '• ').replace('🚀', '• ').replace('🎯', '• ').replace('📊', '• ').replace('📍', '• ').replace('✅', '• ')}
+
+===========================================
+"""
+    
     return report
 
 if __name__ == "__main__":
