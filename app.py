@@ -151,35 +151,8 @@ def main():
         traffic_attribution_analysis()
         
     with tab8:
-        st.markdown("""
-        ### 🚀 Future Analysis Modules:
+        render_traffic_attribution_tab()
         
-        **🤖 SERP Features Impact**
-        - AI Overviews presence & inclusion rates
-        - Featured snippets analysis
-        - SERP feature CTR impact
-        
-        **🔧 Technical SEO Health** 
-        - Core Web Vitals tracking
-        - Crawl error analysis
-        - Index coverage insights
-        
-        **📱 Mobile Performance**
-        - Mobile vs desktop rankings
-        - Mobile usability issues
-        - AMP performance analysis
-        
-        **🌍 Local SEO Analysis**
-        - Local pack rankings
-        - GMB performance metrics
-        - Local citation analysis
-        
-        *Each module will include interactive charts, automated insights, and actionable recommendations!*
-        """)
-        
-        st.markdown("---")
-        st.markdown("**💬 Have specific analysis needs? The framework is designed to be extensible!**")
-
 # Helper functions for file processing
 def read_uploaded_file(uploaded_file):
     """Read uploaded CSV or Excel file"""
@@ -206,6 +179,38 @@ def find_column(columns, patterns):
             if pattern_lower in col_lower:
                 return original_col
     return None
+
+@st.cache_data(show_spinner=False)
+def read_any_table(uploaded) -> pd.DataFrame:
+    name = uploaded.name.lower()
+    if name.endswith((".xlsx", ".xls")):
+        return normalize_columns(pd.read_excel(uploaded))
+    return normalize_columns(pd.read_csv(uploaded))
+
+def _coerce_num(s: pd.Series) -> pd.Series:
+    # handles %, commas, blanks
+    s = s.astype(str).str.replace("%", "", regex=False).str.replace(",", "", regex=False)
+    return pd.to_numeric(s, errors="coerce")
+
+def _safe_pct(num: pd.Series, den: pd.Series) -> pd.Series:
+    den = den.replace(0, np.nan)
+    return (num / den) * 100.0
+
+def _brand_classifier(queries: pd.Series, brand_terms: List[str]) -> pd.Series:
+    if not brand_terms:
+        return pd.Series(["non-branded"] * len(queries), index=queries.index)
+    pattern = "|".join([rf"\b{pd.re.escape(t.strip())}\b" for t in brand_terms if t.strip()])
+    if not pattern:
+        return pd.Series(["non-branded"] * len(queries), index=queries.index)
+    return np.where(queries.str.contains(pattern, case=False, regex=True), "branded", "non-branded")
+
+def _xlsx_download(df_map: Dict[str, pd.DataFrame], filename: str) -> bytes:
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
+        for sheet, df in df_map.items():
+            df.to_excel(writer, index=False, sheet_name=sheet[:31] or "Sheet1")
+    buf.seek(0)
+    return buf.read()
 
 def keyword_visibility_analysis():
     st.markdown('<div class="section-header">🔍 Keyword Visibility Trends (Year-over-Year)</div>', unsafe_allow_html=True)
@@ -3901,40 +3906,283 @@ STRATEGIC INSIGHTS
 """
     
     return report
+# ── Traffic Attribution: tab renderer ────────────────────────────────────────
+@st.cache_data(show_spinner=False)
+def _prep_gsc_queries(gsc_df: pd.DataFrame, brand_terms: List[str]) -> pd.DataFrame:
+    """
+    Expected columns (case/spacing tolerant):
+      - query
+      - clicks_now, impressions_now, ctr_now, position_now
+      - clicks_ly,  impressions_ly,  ctr_ly,  position_ly
+    """
+    df = gsc_df.copy()
+    # Liberal matching for expected columns
+    col_map = {}
+    want = [
+        "query",
+        "clicks_now", "impressions_now", "ctr_now", "position_now",
+        "clicks_ly", "impressions_ly", "ctr_ly", "position_ly"
+    ]
+    for w in want:
+        # try exact, then substring
+        exact = [c for c in df.columns if c == w]
+        if exact:
+            col_map[w] = exact[0]
+            continue
+        subs = [c for c in df.columns if w.replace("_", " ") in c]
+        if subs:
+            col_map[w] = subs[0]
 
-def traffic_attribution_analysis():
-    """Analyze sitewide traffic attribution from GSC"""
-    st.markdown('<div class="section-header">📈 Traffic Attribution Analysis</div>', unsafe_allow_html=True)
-    
-    st.markdown("""
-    <div class="instruction-box">
-        <h4>📋 What This Section Analyzes:</h4>
-        <p>This analysis examines your overall organic performance to understand:</p>
-        <ul>
-            <li><b>Sitewide clicks & impressions</b> - Total organic performance YoY</li>
-            <li><b>CTR trends</b> - Whether click-through rates are improving</li>
-            <li><b>Position changes</b> - Average ranking movement impact</li>
-            <li><b>Demand vs execution</b> - Separate impression growth from CTR issues</li>
-        </ul>
+    # Minimal required: query + clicks_now (+ clicks_ly optional)
+    if "query" not in col_map or "clicks_now" not in col_map:
+        raise ValueError("GSC queries file must include at least 'query' and 'clicks_now' columns (now/YoY sheet).")
+
+    df = df.rename(columns={v: k for k, v in col_map.items()})
+    df["query"] = df["query"].astype(str).str.strip()
+    df["clicks_now"] = _coerce_num(df["clicks_now"]).fillna(0)
+    if "clicks_ly" in df:
+        df["clicks_ly"] = _coerce_num(df["clicks_ly"]).fillna(0)
+    else:
+        df["clicks_ly"] = 0
+
+    # Brand flag
+    df["brand_bucket"] = _brand_classifier(df["query"], brand_terms)
+
+    # Totals for share calc
+    totals = df["clicks_now"].sum()
+    branded_clicks = df.loc[df["brand_bucket"] == "branded", "clicks_now"].sum()
+    nonbr_clicked = totals - branded_clicks
+    branded_share = 0.0 if totals == 0 else branded_clicks / totals
+    nonbr_share = 1.0 - branded_share
+
+    # small summary frame
+    summary = pd.DataFrame({
+        "bucket": ["Branded", "Non-Branded"],
+        "clicks": [branded_clicks, nonbr_clicked],
+        "share": [branded_share, nonbr_share]
+    })
+
+    return df, summary
+
+@st.cache_data(show_spinner=False)
+def _prep_ga4_landing(ga4_lp_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Expected columns (case/spacing tolerant):
+      - landing page (or page path)
+      - sessions (or session), users (optional)
+      - conversions (or key event count / conversions)
+    """
+    df = ga4_lp_df.copy()
+    # Canonicalize columns
+    map_try = {
+        "landing_page": ["landing page", "page path", "page", "landing_page"],
+        "sessions": ["sessions", "session"],
+        "conversions": ["conversions", "key event count", "total conversions", "conversion"],
+        "users": ["users", "user"]
+    }
+    col_map = {}
+    for target, cands in map_try.items():
+        found = None
+        for c in cands:
+            found = next((col for col in df.columns if c in col), None)
+            if found:
+                break
+        if found:
+            col_map[target] = found
+
+    if "landing_page" not in col_map or "sessions" not in col_map:
+        raise ValueError("GA4 landing page file must include 'Landing page' and 'Sessions' (and ideally 'Conversions').")
+
+    df = df.rename(columns={v: k for k, v in col_map.items()})
+    df["sessions"] = _coerce_num(df["sessions"]).fillna(0).astype(float)
+    if "conversions" in df:
+        df["conversions"] = _coerce_num(df["conversions"]).fillna(0).astype(float)
+    else:
+        df["conversions"] = 0.0
+
+    # Clean landing page
+    df["landing_page"] = df["landing_page"].astype(str).str.strip()
+
+    # Roll up duplicates
+    agg = df.groupby("landing_page", as_index=False).agg(
+        sessions=("sessions", "sum"),
+        conversions=("conversions", "sum")
+    )
+    # shares for allocating brand buckets down to pages later
+    total_sessions = agg["sessions"].sum()
+    agg["session_share"] = np.where(total_sessions > 0, agg["sessions"] / total_sessions, 0.0)
+    return agg
+
+@st.cache_data(show_spinner=False)
+def _prep_ga4_acq(ga4_acq_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Expected columns (case/spacing tolerant):
+      - default channel group
+      - session source / medium (optional)
+      - sessions
+      - conversions (optional)
+    """
+    df = ga4_acq_df.copy()
+    # Map columns
+    map_try = {
+        "default_channel_group": ["default channel group", "channel"],
+        "sessions": ["sessions", "session"],
+        "conversions": ["conversions", "key event count", "total conversions"],
+    }
+    col_map = {}
+    for target, cands in map_try.items():
+        found = None
+        for c in cands:
+            found = next((col for col in df.columns if c in col), None)
+            if found:
+                break
+        if found:
+            col_map[target] = found
+
+    if "default_channel_group" not in col_map or "sessions" not in col_map:
+        raise ValueError("GA4 acquisition file must include 'Default channel group' and 'Sessions'.")
+
+    df = df.rename(columns={v: k for k, v in col_map.items()})
+    df["sessions"] = _coerce_num(df["sessions"]).fillna(0).astype(float)
+    if "conversions" in df:
+        df["conversions"] = _coerce_num(df["conversions"]).fillna(0).astype(float)
+    else:
+        df["conversions"] = 0.0
+
+    # Organic only (your file is organic-filtered, but we keep this guard)
+    df = df[df["default_channel_group"].str.contains("organic", case=False, na=False)]
+    totals = df.agg({"sessions": "sum", "conversions": "sum"}).to_dict()
+    return df, totals
+
+def render_traffic_attribution_tab():
+    st.subheader("Traffic Attribution")
+    st.caption("Estimate **Branded vs Non-Branded** contribution to Organic Sessions & Conversions using GSC query mix as weights, then allocate down to Landing Pages.")
+
+    with st.expander("Required inputs & assumptions", expanded=False):
+        st.markdown(
+            "- **Files**: (1) **GA4 – Landing Page (Organic)**, (2) **GA4 – Traffic Acquisition (Organic)**, (3) **GSC – Queries Compare (YoY)**.\n"
+            "- **Attribution**: Calculate **Branded share** from GSC **clicks_now**; apply that share to GA4 **Organic sessions & conversions** totals.\n"
+            "- **Landing Page allocation**: Split Branded/Non-Branded totals across pages by each page’s **session share**."
+        )
+
+    col_u1, col_u2, col_u3 = st.columns(3)
+    ga4_lp_file = col_u1.file_uploader("GA4 Landing Page – Organic (.csv/.xlsx)", type=["csv","xlsx","xls"], key="ta_ga4_lp")
+    ga4_acq_file = col_u2.file_uploader("GA4 Traffic Acquisition – Organic (.csv/.xlsx)", type=["csv","xlsx","xls"], key="ta_ga4_acq")
+    gsc_q_file  = col_u3.file_uploader("GSC Queries Compare (YoY) (.xlsx/.csv)", type=["csv","xlsx","xls"], key="ta_gsc_q")
+
+    brand_terms = st.text_input(
+        "Brand terms (comma-separated, e.g., `falcon, falcon structures, falcon containers`)",
+        value=""
+    )
+    brand_list = [t.strip() for t in brand_terms.split(",") if t.strip()]
+
+    if not (ga4_lp_file and ga4_acq_file and gsc_q_file):
+        st.info("Upload all three files to run attribution.")
+        return
+
+    try:
+        ga4_lp = read_any_table(ga4_lp_file)
+        ga4_acq = read_any_table(ga4_acq_file)
+        gsc_q = read_any_table(gsc_q_file)
+
+        # Prepare datasets
+        gsc_q_det, gsc_summary = _prep_gsc_queries(gsc_q, brand_list)
+        lp_rollup = _prep_ga4_landing(ga4_lp)
+        acq_df, acq_totals = _prep_ga4_acq(ga4_acq)
+
+        total_org_sessions = acq_totals.get("sessions", 0.0)
+        total_org_conversions = acq_totals.get("conversions", 0.0)
+        branded_share = gsc_summary.loc[gsc_summary["bucket"]=="Branded","share"].sum()
+        nonbr_share = 1.0 - branded_share
+
+        # Top summary
+        met = pd.DataFrame({
+            "Metric": ["Organic Sessions", "Organic Conversions", "Branded Share (by GSC clicks)"],
+            "Value": [int(total_org_sessions), float(total_org_conversions), f"{branded_share*100:.1f}%"]
+        })
+
+        # Allocate totals into branded buckets
+        alloc = pd.DataFrame({
+            "bucket": ["Branded","Non-Branded"],
+            "sessions": [total_org_sessions*branded_share, total_org_sessions*nonbr_share],
+            "conversions": [total_org_conversions*branded_share, total_org_conversions*nonbr_share],
+        })
+        alloc["sessions"] = alloc["sessions"].round(0).astype(int)
+        alloc["conversions"] = alloc["conversions"].round(2)
+
+        # Allocate down to landing pages using session share
+        # For each landing page, we split attributed sessions/conversions by the same branded shares.
+        lp_attr = lp_rollup[["landing_page","sessions","conversions","session_share"]].copy()
+        lp_attr["branded_sessions"] = (lp_attr["session_share"] * total_org_sessions * branded_share).round(0).astype(int)
+        lp_attr["nonbranded_sessions"] = (lp_attr["session_share"] * total_org_sessions * nonbr_share).round(0).astype(int)
+        lp_attr["branded_conversions"] = (lp_attr["session_share"] * total_org_conversions * branded_share).round(2)
+        lp_attr["nonbranded_conversions"] = (lp_attr["session_share"] * total_org_conversions * nonbr_share).round(2)
+
+        # UI Blocks
+        st.markdown("### Overall Attribution")
+        c1, c2 = st.columns([1,1])
+        with c1:
+            st.dataframe(met, use_container_width=True)
+        with c2:
+            fig = px.pie(
+                gsc_summary.assign(share=lambda d: d["share"]*100),
+                names="bucket", values="share", hole=0.45, title="GSC Clicks Mix (Now)"
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("### Sessions & Conversions Attributed by Brand")
+        st.dataframe(alloc, use_container_width=True)
+
+        fig2 = px.bar(
+            alloc.melt(id_vars="bucket", value_vars=["sessions","conversions"], var_name="metric", value_name="value"),
+            x="bucket", y="value", facet_col="metric", text_auto=True, title="Attributed Totals"
+        )
+        st.plotly_chart(fig2, use_container_width=True)
+
+        st.markdown("### Landing Page Attribution (allocated by page session share)")
+        st.dataframe(
+            lp_attr.sort_values("sessions", ascending=False)
+                  .rename(columns={
+                      "sessions":"LP Sessions",
+                      "conversions":"LP Conversions",
+                      "branded_sessions":"Branded Sessions (est.)",
+                      "nonbranded_sessions":"Non-Branded Sessions (est.)",
+                      "branded_conversions":"Branded Conversions (est.)",
+                      "nonbranded_conversions":"Non-Branded Conversions (est.)"
+                  }),
+            use_container_width=True
+        )
+
+        # Downloads
+        csv_alloc = alloc.to_csv(index=False).encode("utf-8")
+        csv_lp = lp_attr.to_csv(index=False).encode("utf-8")
+        xlsx_bytes = _xlsx_download(
+            {
+                "overall": met,
+                "brand_allocation": alloc,
+                "landing_page_allocation": lp_attr,
+                "gsc_queries_detail": gsc_q_det
+            },
+            "traffic_attribution.xlsx"
+        )
+
+        d1, d2, d3 = st.columns(3)
+        d1.download_button("⬇️ Download Brand Allocation (CSV)", data=csv_alloc, file_name="brand_allocation.csv", mime="text/csv")
+        d2.download_button("⬇️ Download LP Allocation (CSV)", data=csv_lp, file_name="lp_attribution.csv", mime="text/csv")
+        d3.download_button("⬇️ Download Full Attribution (XLSX)", data=xlsx_bytes, file_name="traffic_attribution.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+        with st.expander("GSC Queries (classified)"):
+            st.dataframe(
+                gsc_q_det[["query","brand_bucket","clicks_now","clicks_ly"]]
+                .sort_values("clicks_now", ascending=False),
+                use_container_width=True
+            )
+
+        st.success("Attribution complete. Tip: refine **Brand terms** to tune the Branded/Non-Branded split.")
+    except Exception as e:
+        st.error(f"Traffic Attribution failed: {e}")
         
-        <h4>📁 Required Files:</h4>
-        <p>You need <b>1-2 files</b>:</p>
-        <ul>
-            <li><b>GSC Search Results Compare</b> - Sitewide performance comparison</li>
-            <li><b>GA4 Traffic Acquisition</b> - Optional: validate organic session impact</li>
-        </ul>
-        
-        <h4>🎯 Key Insights You'll Get:</h4>
-        <ul>
-            <li>Total clicks and impressions YoY changes</li>
-            <li>Weighted CTR and position analysis</li>
-            <li>Traffic pattern interpretation</li>
-            <li>Business impact validation</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.info("🚧 This section will analyze sitewide GSC performance with weighted metrics!")
+
 
 def create_visibility_summary_report(results):
     """Create a downloadable summary report"""
