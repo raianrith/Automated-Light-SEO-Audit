@@ -93,7 +93,7 @@ def main():
         st.markdown("### 📚 How It Works")
         st.markdown("""
         1. **Choose** an analysis tab above
-        2. **Upload** required CSV files  
+        2. **Upload** required CSV/Excel files  
         3. **Review** automated insights
         4. **Download** your reports
         """)
@@ -102,133 +102,240 @@ def main():
         
         st.markdown("### 🔧 Data Sources")
         st.markdown("""
-        - **Semrush**: Keyword rankings & competition
-        - **Google Search Console**: Click & impression data
-        - **GA4**: Traffic & conversion metrics
+        - **Semrush**: Keyword rankings & competition data
+        - **Google Search Console**: Click & impression metrics
+        - **GA4**: Traffic & conversion analytics
         """)
         
         st.markdown("---")
         
-        st.markdown("### 💡 Tips")
+        st.markdown("### 💡 Pro Tips")
         st.markdown("""
-        - Use consistent date ranges across exports
-        - Download CSV format (not PDF)
-        - Validate file contents before uploading
+        - Export in **CSV or Excel format** (never PDF)
+        - Use **consistent date ranges** across all exports
+        - **Same month comparisons** for YoY analysis
+        - Check column headers match expectations
         """)
     
-    # Main content with tabs
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "🔍 Keyword Visibility Trends", 
-        "📈 Keyword Movement Analysis", 
-        "🏆 Top Pages Performance",
-        "⚡ More Coming Soon"
+    # Enhanced tab navigation with more sections
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+        "📋 Data Export Guide",
+        "📊 Visibility Trends", 
+        "🔄 Keyword Movement", 
+        "📄 Page Performance",
+        "🎯 Query Analysis",
+        "🏁 Competitor Gaps",
+        "📈 Traffic Attribution", 
+        "🚧 More Soon"
     ])
     
     with tab1:
-        keyword_visibility_analysis()
+        data_export_instructions()
         
     with tab2:
-        st.info("🚧 Keyword Movement Distribution analysis coming next! This will show which keywords are improving vs declining with detailed winner/loser breakdowns.")
+        keyword_visibility_analysis()
         
     with tab3:
-        st.info("🚧 Top Pages Performance analysis coming soon! This will identify your highest-value pages and optimization opportunities.")
+        keyword_movement_analysis()
         
     with tab4:
+        page_performance_analysis()
+        
+    with tab5:
+        query_gains_losses_analysis()
+        
+    with tab6:
+        competitor_analysis()
+        
+    with tab7:
+        traffic_attribution_analysis()
+        
+    with tab8:
         st.markdown("""
-        ### 🚀 Upcoming Analysis Sections:
+        ### 🚀 Future Analysis Modules:
         
-        - **🎯 Query-Level Gains & Losses** - Identify which search terms are driving traffic changes
-        - **🏁 Competitor Benchmarking** - See how you stack up against search rivals  
-        - **📊 Traffic Attribution Analysis** - Connect SEO data to actual business metrics
-        - **🤖 SERP Features Impact** - Understand how AI Overviews and features affect CTR
-        - **🔧 Technical SEO Health** - Core Web Vitals and crawlability insights
-        - **📈 Conversion Optimization** - Landing page performance for organic traffic
+        **🤖 SERP Features Impact**
+        - AI Overviews presence & inclusion rates
+        - Featured snippets analysis
+        - SERP feature CTR impact
         
-        *Each section will include interactive charts, automated insights, and downloadable reports!*
+        **🔧 Technical SEO Health** 
+        - Core Web Vitals tracking
+        - Crawl error analysis
+        - Index coverage insights
+        
+        **📱 Mobile Performance**
+        - Mobile vs desktop rankings
+        - Mobile usability issues
+        - AMP performance analysis
+        
+        **🌍 Local SEO Analysis**
+        - Local pack rankings
+        - GMB performance metrics
+        - Local citation analysis
+        
+        *Each module will include interactive charts, automated insights, and actionable recommendations!*
         """)
         
         st.markdown("---")
-        st.markdown("**📧 Have suggestions or need a specific analysis? Let us know!**")
+        st.markdown("**💬 Have specific analysis needs? The framework is designed to be extensible!**")
+
+# Helper functions for file processing
+def read_uploaded_file(uploaded_file):
+    """Read uploaded CSV or Excel file"""
+    if uploaded_file is not None:
+        file_name = uploaded_file.name.lower()
+        if file_name.endswith('.xlsx') or file_name.endswith('.xls'):
+            return pd.read_excel(uploaded_file)
+        else:
+            return pd.read_csv(uploaded_file)
+    return None
+
+def normalize_columns(df):
+    """Normalize column names by cleaning whitespace and special characters"""
+    df = df.copy()
+    df.columns = [re.sub(r"\s+", " ", str(c).replace("\xa0", " ")).strip() for c in df.columns]
+    return df
+
+def find_column(columns, patterns):
+    """Find column by searching for patterns (case-insensitive)"""
+    columns_lower = {str(c).lower(): c for c in columns}
+    for pattern in patterns:
+        pattern_lower = pattern.lower()
+        for col_lower, original_col in columns_lower.items():
+            if pattern_lower in col_lower:
+                return original_col
+    return None
 
 def keyword_visibility_analysis():
     st.markdown('<div class="section-header">🔍 Keyword Visibility Trends (Year-over-Year)</div>', unsafe_allow_html=True)
     
-    # Instructions
-    st.markdown("""
-    <div class="instruction-box">
-        <h4>📋 What This Section Analyzes:</h4>
-        <p>This analysis compares your keyword rankings between two time periods (typically current year vs last year) to understand:</p>
-        <ul>
-            <li><b>Total keyword footprint changes</b> - Are you ranking for more or fewer keywords?</li>
-            <li><b>Ranking quality distribution</b> - What percentage of keywords are in top positions?</li>
-            <li><b>Strategic insights</b> - Whether you're gaining authority or losing visibility breadth</li>
-        </ul>
+    # Modern instruction design using containers and columns
+    with st.container():
+        st.markdown("### 📊 Analysis Overview")
         
-        <h4>📁 Required Files:</h4>
-        <p>You need <b>2 Semrush Positions CSV files</b>:</p>
-        <ol>
-            <li><b>Current Period:</b> Recent Semrush Positions export (current month)</li>
-            <li><b>Previous Period:</b> Same month from previous year (for YoY comparison)</li>
-        </ol>
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.markdown("""
+            This analysis compares your keyword rankings between two time periods to understand:
+            
+            **🎯 Key Questions Answered:**
+            - Are you ranking for more or fewer keywords?
+            - What percentage of keywords are in top positions? 
+            - Are you gaining authority or losing visibility breadth?
+            """)
         
-        <h4>🎯 Key Insights You'll Get:</h4>
-        <ul>
-            <li>Total keywords change (Δ and %)</li>
-            <li>Ranking distribution by position buckets</li>
-            <li>Quality vs quantity analysis</li>
-            <li>Strategic recommendations</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
+        with col2:
+            st.info("""
+            **💡 Strategic Value**
+            
+            Identifies whether you're building stronger authority or need to expand your keyword footprint.
+            """)
+    
+    # File requirements in expandable section
+    with st.expander("📁 **File Requirements & Setup**", expanded=False):
+        st.markdown("""
+        **Required Files:** 2 Semrush Positions exports
+        
+        | File | Description | Export From |
+        |------|-------------|-------------|
+        | **Current Period** | Recent month Semrush Positions | Domain Analytics → Organic Research → Positions |
+        | **Previous Period** | Same month last year | Same location, different date |
+        
+        **📋 Export Settings:**
+        - Database: United States (or your target country)
+        - Device: Desktop 
+        - Format: CSV or Excel
+        - Date: Current month vs Same month last year
+        """)
+    
+    # Key insights preview
+    st.markdown("### 🎯 Analysis Insights You'll Get")
+    
+    insight_col1, insight_col2, insight_col3 = st.columns(3)
+    
+    with insight_col1:
+        st.markdown("""
+        **📈 Total Keywords**
+        - Year-over-year change
+        - Growth vs decline analysis
+        """)
+    
+    with insight_col2:
+        st.markdown("""
+        **🏆 Ranking Quality**
+        - Top 3, 4-10, 11-20, 21+ distribution
+        - Quality vs quantity trade-offs
+        """)
+    
+    with insight_col3:
+        st.markdown("""
+        **💡 Strategic Recommendations**
+        - Authority building opportunities
+        - Breadth expansion needs
+        """)
+    
+    st.markdown("---")
     
     # File upload section
-    st.markdown('<div class="file-upload-section">', unsafe_allow_html=True)
+    st.markdown("### 📤 Upload Your Data Files")
+    
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("#### 📤 Current Period (2024/2025)")
+        st.markdown("#### 📊 Current Period (2024/2025)")
         current_file = st.file_uploader(
-            "Upload current Semrush Positions CSV",
-            type=['csv'],
+            "Upload current Semrush Positions file",
+            type=['csv', 'xlsx', 'xls'],
             key="current_positions",
-            help="Export from Semrush: Domain Analytics → Organic Research → Positions"
+            help="Export from Semrush: Domain Analytics → Organic Research → Positions (CSV or Excel format)"
         )
         
     with col2:
-        st.markdown("#### 📤 Previous Period (Same Month Last Year)")
+        st.markdown("#### 📊 Previous Period (Same Month Last Year)")
         previous_file = st.file_uploader(
-            "Upload previous year Semrush Positions CSV", 
-            type=['csv'],
+            "Upload previous year Semrush Positions file", 
+            type=['csv', 'xlsx', 'xls'],
             key="previous_positions",
-            help="Same export but for the corresponding month last year"
+            help="Same export but for the corresponding month last year (CSV or Excel format)"
         )
-    
-    st.markdown('</div>', unsafe_allow_html=True)
     
     # Process files if both are uploaded
     if current_file is not None and previous_file is not None:
-        with st.spinner("🔄 Processing your data..."):
-            try:
-                # Load data
-                current_df = pd.read_csv(current_file)
-                previous_df = pd.read_csv(previous_file)
-                
-                # Validate data
-                validation_passed, validation_message = validate_positions_data(current_df, previous_df)
-                
-                if not validation_passed:
-                    st.markdown(f'<div class="warning-box">{validation_message}</div>', unsafe_allow_html=True)
-                    return
-                
-                # Perform analysis
-                analysis_results = analyze_keyword_visibility(current_df, previous_df)
-                
-                # Display results
-                display_visibility_results(analysis_results)
-                
-            except Exception as e:
-                st.error(f"❌ Error processing files: {str(e)}")
-                st.info("💡 Please ensure you've uploaded valid Semrush Positions CSV files")
+        # Add Run Analysis button (centered)
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            run_analysis = st.button("🚀 Run Visibility Analysis", key="run_visibility", type="primary", use_container_width=True)
+        
+        # Display results outside column context for full width
+        if run_analysis:
+            with st.spinner("🔄 Processing your data..."):
+                try:
+                    # Load data using helper functions
+                    current_df = normalize_columns(read_uploaded_file(current_file))
+                    previous_df = normalize_columns(read_uploaded_file(previous_file))
+                    
+                    # Validate data
+                    validation_passed, validation_message = validate_positions_data(current_df, previous_df)
+                    
+                    if not validation_passed:
+                        st.error(validation_message)
+                        st.stop()
+                    
+                    # Perform analysis
+                    analysis_results = analyze_keyword_visibility(current_df, previous_df)
+                    
+                    # Display results - NOW IN FULL WIDTH
+                    display_visibility_results(analysis_results)
+                    
+                except Exception as e:
+                    st.error(f"❌ Error processing files: {str(e)}")
+                    st.info("💡 Please ensure you've uploaded valid Semrush Positions CSV or Excel files")
+    else:
+        if current_file is None:
+            st.info("📤 Please upload the current period Semrush Positions file")
+        if previous_file is None:
+            st.info("📤 Please upload the previous period Semrush Positions file")
 
 def validate_positions_data(current_df, previous_df):
     """Validate the uploaded Semrush positions data"""
@@ -380,59 +487,73 @@ def display_visibility_results(results):
     # Visualization section
     st.markdown('<div class="section-header">📊 Ranking Distribution Analysis</div>', unsafe_allow_html=True)
     
-    viz_col1, viz_col2 = st.columns(2)
+    # Prepare data for charts
+    bucket_labels = ['Top 3', '4-10', '11-20', '21+']
+    current_values = [results['bucket_changes'][k]['current'] for k in ['top_3', 'top_4_10', 'top_11_20', 'top_21_plus']]
+    previous_values = [results['bucket_changes'][k]['previous'] for k in ['top_3', 'top_4_10', 'top_11_20', 'top_21_plus']]
     
-    with viz_col1:
-        # Ranking distribution comparison chart
-        bucket_labels = ['Top 3', '4-10', '11-20', '21+']
-        current_values = [results['bucket_changes'][k]['current'] for k in ['top_3', 'top_4_10', 'top_11_20', 'top_21_plus']]
-        previous_values = [results['bucket_changes'][k]['previous'] for k in ['top_3', 'top_4_10', 'top_11_20', 'top_21_plus']]
-        
-        fig_distribution = go.Figure(data=[
-            go.Bar(name='Previous Period', x=bucket_labels, y=previous_values, marker_color='lightblue'),
-            go.Bar(name='Current Period', x=bucket_labels, y=current_values, marker_color='darkblue')
-        ])
-        
-        fig_distribution.update_layout(
-            title='Keyword Count by Ranking Position',
-            xaxis_title='Ranking Position',
-            yaxis_title='Number of Keywords',
-            barmode='group',
-            height=400
-        )
-        
-        st.plotly_chart(fig_distribution, use_container_width=True)
+    # Full width charts - stacked vertically for better space usage
+    # First chart - ranking distribution comparison
+    fig_distribution = go.Figure(data=[
+        go.Bar(name='Previous Period', x=bucket_labels, y=previous_values, 
+               marker_color='lightblue', text=[f"{val:,}" for val in previous_values],
+               textposition='auto', textfont=dict(size=12)),
+        go.Bar(name='Current Period', x=bucket_labels, y=current_values, 
+               marker_color='darkblue', text=[f"{val:,}" for val in current_values],
+               textposition='auto', textfont=dict(size=12))
+    ])
     
-    with viz_col2:
-        # Share distribution pie charts
-        fig_pie = make_subplots(
-            rows=1, cols=2, 
-            specs=[[{'type':'domain'}, {'type':'domain'}]],
-            subplot_titles=('Previous Period', 'Current Period')
-        )
-        
-        # Previous period pie
-        fig_pie.add_trace(go.Pie(
-            labels=bucket_labels,
-            values=previous_values,
-            name="Previous",
-            marker_colors=['#ff9999', '#66b3ff', '#99ff99', '#ffcc99']
-        ), 1, 1)
-        
-        # Current period pie
-        fig_pie.add_trace(go.Pie(
-            labels=bucket_labels,
-            values=current_values,
-            name="Current",
-            marker_colors=['#ff6666', '#3399ff', '#66ff66', '#ffb366']
-        ), 1, 2)
-        
-        fig_pie.update_layout(
-            title_text="Ranking Distribution Share",
-            height=400
-        )
-        
-        st.plotly_chart(fig_pie, use_container_width=True)
+    fig_distribution.update_layout(
+        title=dict(text='Keyword Count by Ranking Position', font=dict(size=20)),
+        xaxis_title='Ranking Position',
+        yaxis_title='Number of Keywords',
+        barmode='group',
+        height=500,
+        margin=dict(l=60, r=60, t=80, b=60),
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        xaxis=dict(tickfont=dict(size=14)),
+        yaxis=dict(tickfont=dict(size=14))
+    )
+    
+    st.plotly_chart(fig_distribution, use_container_width=True, config={'displayModeBar': False})
+    
+    # Second chart - share distribution comparison (side by side pie charts)
+    fig_pie = make_subplots(
+        rows=1, cols=2, 
+        specs=[[{'type':'domain'}, {'type':'domain'}]],
+        subplot_titles=('Previous Period Share', 'Current Period Share')
+    )
+    
+    # Previous period pie
+    fig_pie.add_trace(go.Pie(
+        labels=bucket_labels,
+        values=previous_values,
+        name="Previous",
+        marker_colors=['#ff9999', '#66b3ff', '#99ff99', '#ffcc99'],
+        textinfo='label+percent',
+        textfont=dict(size=12)
+    ), 1, 1)
+    
+    # Current period pie
+    fig_pie.add_trace(go.Pie(
+        labels=bucket_labels,
+        values=current_values,
+        name="Current",
+        marker_colors=['#ff6666', '#3399ff', '#66ff66', '#ffb366'],
+        textinfo='label+percent',
+        textfont=dict(size=12)
+    ), 1, 2)
+    
+    fig_pie.update_layout(
+        title=dict(text="Ranking Distribution Share Comparison", font=dict(size=20)),
+        height=500,
+        margin=dict(l=60, r=60, t=100, b=60),
+        paper_bgcolor='rgba(0,0,0,0)'
+    )
+    
+    st.plotly_chart(fig_pie, use_container_width=True, config={'displayModeBar': False})
     
     # Detailed changes table
     st.markdown('<div class="section-header">📋 Detailed Changes by Ranking Bucket</div>', unsafe_allow_html=True)
@@ -1043,56 +1164,55 @@ def display_movement_results(results):
     # Distribution chart
     st.markdown('<div class="section-header">📊 Movement Distribution</div>', unsafe_allow_html=True)
     
-    # Single row with both charts using full width
-    col1, col2 = st.columns([1, 1], gap="large")
-    
-    with col1:
-        # Bar chart of movement distribution
-        dist_data = results['movement_counts']
-        fig_dist = go.Figure(data=[
-            go.Bar(x=list(dist_data.keys()), 
-                   y=list(dist_data.values()),
-                   marker_color=['#2ecc71', '#e74c3c', '#95a5a6'],
-                   text=[f"{val:,}" for val in dist_data.values()],
-                   textposition='auto',
-                   textfont=dict(size=14, color='white')
-            )
-        ])
-        
-        fig_dist.update_layout(
-            title=dict(text='Keyword Movement Distribution', font=dict(size=16)),
-            xaxis_title='Movement Type',
-            yaxis_title='Number of Keywords',
-            height=450,
-            margin=dict(l=20, r=20, t=40, b=40),
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)'
+    # Full-width bar chart
+    dist_data = results['movement_counts']
+    fig_dist = go.Figure(data=[
+        go.Bar(x=list(dist_data.keys()), 
+               y=list(dist_data.values()),
+               marker_color=['#2ecc71', '#e74c3c', '#95a5a6'],
+               text=[f"{val:,}" for val in dist_data.values()],
+               textposition='auto',
+               textfont=dict(size=16, color='white')
         )
-        
-        st.plotly_chart(fig_dist, use_container_width=True, config={'displayModeBar': False})
+    ])
     
-    with col2:
-        # Pie chart of movement share
-        labels = list(results['movement_counts'].keys())
-        values = list(results['movement_counts'].values())
-        
-        fig_pie = go.Figure(data=[go.Pie(
-            labels=labels,
-            values=values,
-            marker_colors=['#2ecc71', '#e74c3c', '#95a5a6'],
-            textinfo='label+percent',
-            textfont=dict(size=12),
-            pull=[0.05, 0.05, 0]
-        )])
-        
-        fig_pie.update_layout(
-            title=dict(text='Movement Distribution Share', font=dict(size=16)),
-            height=450,
-            margin=dict(l=20, r=20, t=40, b=40),
-            paper_bgcolor='rgba(0,0,0,0)'
-        )
-        
-        st.plotly_chart(fig_pie, use_container_width=True, config={'displayModeBar': False})
+    fig_dist.update_layout(
+        title=dict(text='Keyword Movement Distribution', font=dict(size=20)),
+        xaxis_title='Movement Type',
+        yaxis_title='Number of Keywords',
+        height=500,
+        margin=dict(l=60, r=60, t=80, b=60),
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        xaxis=dict(tickfont=dict(size=14)),
+        yaxis=dict(tickfont=dict(size=14))
+    )
+    
+    st.plotly_chart(fig_dist, use_container_width=True, config={'displayModeBar': False})
+    
+    # Full-width pie chart 
+    labels = list(results['movement_counts'].keys())
+    values = list(results['movement_counts'].values())
+    
+    fig_pie = go.Figure(data=[go.Pie(
+        labels=labels,
+        values=values,
+        marker_colors=['#2ecc71', '#e74c3c', '#95a5a6'],
+        textinfo='label+percent+value',
+        textfont=dict(size=14),
+        pull=[0.05, 0.05, 0],
+        hole=0.3
+    )])
+    
+    fig_pie.update_layout(
+        title=dict(text='Movement Distribution Share', font=dict(size=20)),
+        height=500,
+        margin=dict(l=60, r=60, t=80, b=60),
+        paper_bgcolor='rgba(0,0,0,0)',
+        annotations=[dict(text=f'Total<br>{sum(values):,}', x=0.5, y=0.5, font_size=16, showarrow=False)]
+    )
+    
+    st.plotly_chart(fig_pie, use_container_width=True, config={'displayModeBar': False})
     
     # Top winners and losers - full width layout
     st.markdown('<div class="section-header">🏆 Top Moving Keywords</div>', unsafe_allow_html=True)
@@ -1919,6 +2039,19 @@ def analyze_page_performance(df):
     # Build working dataframe
     work_df = pd.DataFrame()
     work_df['URL'] = df[url_col].astype(str).str.strip()
+    
+    # Normalize URLs to handle trailing slashes and case variations
+    def normalize_url(url):
+        if pd.isna(url) or url == '':
+            return url
+        url = str(url).strip()
+        # Remove trailing slash (but keep if it's just the domain)
+        if url.endswith('/') and url.count('/') > 2:
+            url = url.rstrip('/')
+        # Convert to lowercase for consistent comparison
+        return url.lower()
+    
+    work_df['URL_Normalized'] = work_df['URL'].apply(normalize_url)
     work_df['Traffic'] = pd.to_numeric(df[traffic_col].astype(str).str.replace(',', ''), errors='coerce')
     
     if traffic_pct_col:
@@ -1945,16 +2078,30 @@ def analyze_page_performance(df):
     
     # Clean data
     work_df = work_df[work_df['URL'].notna() & work_df['URL'].ne('') & work_df['Traffic'].notna()].copy()
-    work_df = work_df.sort_values('Traffic', ascending=False).reset_index(drop=True)
+    
+    # Aggregate duplicates by normalized URL (sum traffic, keep first URL for display)
+    agg_df = work_df.groupby('URL_Normalized').agg({
+        'URL': 'first',  # Keep first URL for display
+        'Traffic': 'sum',  # Sum traffic for duplicates
+        'Traffic_Pct': 'sum',  # Sum traffic percentage
+        'Keywords': 'sum' if 'Keywords' in work_df.columns else 'first'
+    }).reset_index()
+    
+    # Recalculate traffic percentage after aggregation
+    total_traffic = agg_df['Traffic'].sum()
+    agg_df['Traffic_Pct'] = (agg_df['Traffic'] / total_traffic * 100) if total_traffic > 0 else 0
+    
+    # Sort by traffic
+    agg_df = agg_df.sort_values('Traffic', ascending=False).reset_index(drop=True)
     
     # 1. Pareto Analysis
-    work_df['Cumulative_Pct'] = work_df['Traffic_Pct'].cumsum().clip(upper=100)
+    agg_df['Cumulative_Pct'] = agg_df['Traffic_Pct'].cumsum().clip(upper=100)
     
     def pages_to_threshold(threshold):
-        if work_df['Cumulative_Pct'].empty:
+        if agg_df['Cumulative_Pct'].empty:
             return np.nan
-        idx = np.argmax(work_df['Cumulative_Pct'].values >= threshold)
-        return int(idx + 1) if work_df['Cumulative_Pct'].iloc[-1] >= threshold else len(work_df)
+        idx = np.argmax(agg_df['Cumulative_Pct'].values >= threshold)
+        return int(idx + 1) if agg_df['Cumulative_Pct'].iloc[-1] >= threshold else len(agg_df)
     
     pareto_thresholds = {
         '50%': pages_to_threshold(50),
@@ -1964,8 +2111,8 @@ def analyze_page_performance(df):
     
     # 2. Efficiency Analysis (Traffic per Keyword)
     efficiency_df = pd.DataFrame()
-    if not work_df['Keywords'].isna().all():
-        eff_df = work_df[work_df['Keywords'] > 0].copy()
+    if not agg_df['Keywords'].isna().all():
+        eff_df = agg_df[agg_df['Keywords'] > 0].copy()
         min_keywords = max(5, int(np.median(eff_df['Keywords']))) if len(eff_df) > 0 else 5
         min_keywords = min(min_keywords, 20)  # Cap at 20 for broader analysis
         
@@ -1982,9 +2129,9 @@ def analyze_page_performance(df):
         except:
             return '/'
     
-    work_df['Directory'] = work_df['URL'].apply(extract_first_directory)
+    agg_df['Directory'] = agg_df['URL'].apply(extract_first_directory)
     
-    directory_analysis = (work_df.groupby('Directory')
+    directory_analysis = (agg_df.groupby('Directory')
                          .agg({
                              'Traffic': 'sum',
                              'URL': 'count',  # Page count
@@ -1999,8 +2146,8 @@ def analyze_page_performance(df):
     
     # 4. Long-tail Opportunities
     longtail_df = pd.DataFrame()
-    if not work_df['Keywords'].isna().all():
-        opp_df = work_df[work_df['Keywords'] > 0].copy()
+    if not agg_df['Keywords'].isna().all():
+        opp_df = agg_df[agg_df['Keywords'] > 0].copy()
         opp_df['TPK'] = (opp_df['Traffic'] / opp_df['Keywords']).replace([np.inf, -np.inf], np.nan)
         
         # High breadth (75th percentile keywords), low efficiency (25th percentile TPK)
@@ -2011,15 +2158,15 @@ def analyze_page_performance(df):
         longtail_df = longtail_df.sort_values(['Keywords', 'TPK'], ascending=[False, True])
     
     return {
-        'total_pages': len(work_df),
-        'total_traffic': work_df['Traffic'].sum(),
-        'pareto_data': work_df[['URL', 'Traffic', 'Traffic_Pct', 'Cumulative_Pct']].copy(),
+        'total_pages': len(agg_df),  # Now count distinct normalized URLs
+        'total_traffic': agg_df['Traffic'].sum(),
+        'pareto_data': agg_df[['URL', 'Traffic', 'Traffic_Pct', 'Cumulative_Pct']].copy(),
         'pareto_thresholds': pareto_thresholds,
-        'top_pages': work_df.head(25),
+        'top_pages': agg_df.head(25),
         'efficiency_analysis': efficiency_df.head(25) if not efficiency_df.empty else pd.DataFrame(),
         'directory_analysis': directory_analysis.head(15),
         'longtail_opportunities': longtail_df.head(25) if not longtail_df.empty else pd.DataFrame(),
-        'raw_data': work_df
+        'raw_data': agg_df
     }
 
 def display_pages_results(results):
@@ -2044,12 +2191,14 @@ def display_pages_results(results):
         )
     
     with col3:
-        pages_50 = results['pareto_thresholds']['50%']
-        concentration = (pages_50 / results['total_pages'] * 100) if pages_50 and results['total_pages'] > 0 else 0
+        # Calculate top 10 pages traffic share - more actionable metric
+        top_10_traffic = results['top_pages'].head(10)['Traffic'].sum() if len(results['top_pages']) >= 10 else results['top_pages']['Traffic'].sum()
+        top_10_share = (top_10_traffic / results['total_traffic'] * 100) if results['total_traffic'] > 0 else 0
+        
         st.metric(
-            label="Traffic Concentration",
-            value=f"{concentration:.1f}%",
-            help=f"{pages_50} pages drive 50% of traffic"
+            label="Top 10 Pages Share",
+            value=f"{top_10_share:.1f}%",
+            help="Percentage of total traffic from your top 10 pages"
         )
     
     with col4:
