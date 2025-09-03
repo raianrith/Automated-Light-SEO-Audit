@@ -36,16 +36,16 @@ st.markdown("""
     }
     
     .section-header {
-        font-size: 1.8rem;
-        font-weight: bold;
+        font-size: 1.6rem;
+        font-weight: 600;
         color: #2c3e50;
-        margin: 1.5rem 0 1rem 0;
-        padding: 0.5rem;
-        background-color: #f8f9fa;
-        border-radius: 5px;
+        margin: 2rem 0 1rem 0;
+        padding: 0.6rem 1rem;
         border-left: 4px solid #3498db;
+        background: #fafafa;
+        border-radius: 6px;
     }
-    
+        
     .instruction-box {
         background-color: #f0f8ff;
         padding: 1rem;
