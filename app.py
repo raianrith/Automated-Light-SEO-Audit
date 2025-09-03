@@ -4243,19 +4243,86 @@ def validate_gsc_queries_data(df):
     return True, "GSC data validated"
 
 def validate_ga4_traffic_data(df):
-    """Validate GA4 Traffic Acquisition data"""
+    """Validate GA4 Traffic Acquisition data - Updated for flexible column matching"""
     if df is None or len(df) == 0:
         return False, "File appears to be empty"
     
-    st.info(f"📋 GA4 Traffic columns: {list(df.columns)[:10]}")
+    st.info(f"📋 GA4 Traffic columns detected: {list(df.columns)}")
     
-    # Look for sessions column (main metric we need)
-    sessions_col = find_column(df.columns, ['sessions'])
+    # Look for sessions column with more flexible matching
+    sessions_col = find_column(df.columns, ['sessions', 'session', 'users', 'active users'])
     
     if not sessions_col:
-        return False, "Missing Sessions column in GA4 traffic data"
+        # List available columns to help debug
+        available_cols = ", ".join(list(df.columns)[:15])  # Show first 15 columns
+        return False, f"Missing Sessions/Users column. Available columns: {available_cols}"
     
     return True, "GA4 traffic data validated"
+
+def analyze_ga4_traffic_detailed(ga4_df):
+    """Detailed GA4 traffic analysis - Updated for flexible column matching"""
+    
+    # Find columns with more flexible matching
+    sessions_col = find_column(ga4_df.columns, ['sessions', 'session'])
+    users_col = find_column(ga4_df.columns, ['users', 'active users', 'total users'])
+    engaged_sessions_col = find_column(ga4_df.columns, ['engaged sessions'])
+    events_col = find_column(ga4_df.columns, ['key events', 'conversions', 'events', 'total events'])
+    bounce_rate_col = find_column(ga4_df.columns, ['bounce rate'])
+    avg_duration_col = find_column(ga4_df.columns, ['average engagement time', 'avg engagement time', 'engagement time'])
+    engagement_rate_col = find_column(ga4_df.columns, ['engagement rate', 'engaged sessions per user'])
+    
+    # If we have multiple rows, try to find the organic search row
+    organic_row = None
+    
+    # Check if there's a channel grouping column
+    channel_col = find_column(ga4_df.columns, ['default channel group', 'session default channel group', 'channel', 'source', 'medium'])
+    
+    if channel_col:
+        # Look for organic search row
+        organic_mask = ga4_df[channel_col].str.contains('Organic', case=False, na=False)
+        if organic_mask.any():
+            organic_row = ga4_df[organic_mask].iloc[0]
+        else:
+            # If no organic found, use first row (assuming it's already filtered)
+            organic_row = ga4_df.iloc[0] if len(ga4_df) > 0 else None
+    else:
+        # No channel column, assume data is already filtered to organic
+        organic_row = ga4_df.iloc[0] if len(ga4_df) > 0 else None
+    
+    if organic_row is None:
+        return None
+    
+    analysis = {}
+    
+    # Extract available metrics
+    if sessions_col:
+        analysis['sessions'] = pd.to_numeric(organic_row[sessions_col], errors='coerce')
+    elif users_col:
+        # If no sessions column, use users as a proxy
+        analysis['sessions'] = pd.to_numeric(organic_row[users_col], errors='coerce')
+        
+    if users_col:
+        analysis['users'] = pd.to_numeric(organic_row[users_col], errors='coerce')
+    if engaged_sessions_col:
+        analysis['engaged_sessions'] = pd.to_numeric(organic_row[engaged_sessions_col], errors='coerce')
+    if events_col:
+        analysis['key_events'] = pd.to_numeric(organic_row[events_col], errors='coerce')
+    if bounce_rate_col:
+        analysis['bounce_rate'] = pd.to_numeric(organic_row[bounce_rate_col], errors='coerce')
+    if avg_duration_col:
+        analysis['avg_engagement_time'] = pd.to_numeric(organic_row[avg_duration_col], errors='coerce')
+    if engagement_rate_col:
+        analysis['engagement_rate'] = pd.to_numeric(organic_row[engagement_rate_col], errors='coerce')
+    
+    # Calculate engagement rate if we have the components
+    if 'engagement_rate' not in analysis and 'sessions' in analysis and 'engaged_sessions' in analysis and analysis['sessions'] > 0:
+        analysis['engagement_rate'] = (analysis['engaged_sessions'] / analysis['sessions'] * 100)
+    
+    # Calculate conversion rate if we have the components
+    if 'sessions' in analysis and 'key_events' in analysis and analysis['sessions'] > 0:
+        analysis['conversion_rate'] = (analysis['key_events'] / analysis['sessions'] * 100)
+    
+    return analysis
 
 def validate_ga4_landing_data(df):
     """Validate GA4 Landing Page data"""
