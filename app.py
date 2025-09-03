@@ -148,7 +148,7 @@ def main():
         competitor_analysis()
         
     with tab7:
-        render_traffic_attribution_tab(namespace: str = "ta")
+        render_traffic_attribution_tab()
         
         
 # Helper functions for file processing
@@ -4123,18 +4123,18 @@ def render_traffic_attribution_tab():
     col_u1, col_u2, col_u3 = st.columns(3)
     ga4_lp_file = col_u1.file_uploader(
         "GA4 Landing Page – Organic (.csv/.xlsx)",
-        type=["csv","xlsx","xls"],
-        key=f"{namespace}_ga4_lp",
+        type=["csv", "xlsx", "xls"],
+        key="ta_ga4_lp",
     )
     ga4_acq_file = col_u2.file_uploader(
         "GA4 Traffic Acquisition – Organic (.csv/.xlsx)",
-        type=["csv","xlsx","xls"],
-        key=f"{namespace}_ga4_acq",
+        type=["csv", "xlsx", "xls"],
+        key="ta_ga4_acq",
     )
-    gsc_q_file  = col_u3.file_uploader(
+    gsc_q_file = col_u3.file_uploader(
         "GSC Queries Compare (YoY) (.xlsx/.csv)",
-        type=["csv","xlsx","xls"],
-        key=f"{namespace}_gsc_q",
+        type=["csv", "xlsx", "xls"],
+        key="ta_gsc_q",
     )
 
     brand_terms = st.text_input(
