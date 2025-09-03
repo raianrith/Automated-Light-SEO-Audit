@@ -658,22 +658,51 @@ def generate_visibility_insights(results):
 
 def data_export_instructions():
     """Comprehensive guide for exporting data from various SEO tools"""
-    st.markdown('<div class="section-header">📋 Data Export Guide</div>', unsafe_allow_html=True)
-    
-    st.markdown("""
-    <div class="instruction-box">
-        <h4>🎯 Quick Reference</h4>
-        <p>This guide provides step-by-step instructions for exporting data from <b>Semrush</b>, <b>Google Search Console</b>, and <b>GA4</b>. Follow these instructions to get the exact files needed for each analysis section.</p>
-        
-        <h4>🔑 Key Rules</h4>
-        <ul>
-            <li><b>Always export CSV or Excel format</b> - Never PDF</li>
-            <li><b>Use consistent naming:</b> client_tool_report_period.csv</li>
-            <li><b>Same date ranges</b> across all exports for accuracy</li>
-            <li><b>Year-over-year comparisons</b> should use same month from previous year</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
+
+    st.markdown("### 📋 Data Export Guide")
+    st.caption("Step-by-step instructions for exporting the exact files you’ll need from Semrush, Google Search Console, and GA4.")
+
+    # Quick Reference
+    st.markdown(
+        """
+        <div style="
+            background-color:#f9f9f9;
+            border:1px solid #e6e6e6;
+            border-radius:12px;
+            padding:18px;
+            margin-bottom:18px;
+        ">
+            <h4 style="margin-top:0;">🎯 Quick Reference</h4>
+            <p style="margin-bottom:0;">
+                Export your data in <b>CSV</b> or <b>Excel</b> format only — never PDF. 
+                Use clear naming conventions and align date ranges across all tools.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # Key Rules as a styled list
+    st.markdown(
+        """
+        <div style="
+            background-color:#ffffff;
+            border-left:4px solid #4CAF50;
+            padding:16px;
+            border-radius:8px;
+        ">
+            <h4 style="margin-top:0;">🔑 Key Rules</h4>
+            <ul style="margin:0;">
+                <li>Always export <b>CSV</b> or <b>Excel</b> format — never PDF</li>
+                <li>Use consistent naming: <code>client_tool_report_period.csv</code></li>
+                <li>Apply the <b>same date ranges</b> across all exports for accuracy</li>
+                <li>For year-over-year, compare the <b>same month</b> from the previous year</li>
+            </ul>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
     
     # Create expandable sections for each tool
     with st.expander("🔍 **Semrush Exports** - Keyword Rankings & Competition Data", expanded=True):
