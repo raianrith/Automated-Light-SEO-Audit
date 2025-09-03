@@ -90,7 +90,7 @@ st.markdown("""
 
 def main():
     # Main header
-    st.markdown('<div class="main-header">🚀 <span>SEO Performance Analyzer</span></div>',, unsafe_allow_html=True)
+    st.markdown('<div class="main-header">🚀 <span>SEO Performance Analyzer</span></div>', unsafe_allow_html=True)
     
     # Sidebar guide
     with st.sidebar:
