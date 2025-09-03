@@ -148,7 +148,7 @@ def main():
         competitor_analysis()
         
     with tab7:
-        render_traffic_attribution_tab(namespace="ta")
+        render_traffic_attribution_tab(namespace: str = "ta")
         
         
 # Helper functions for file processing
