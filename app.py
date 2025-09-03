@@ -149,7 +149,7 @@ def main():
         competitor_analysis()
         
     with tab7:
-        traffic_attribution_analysis()
+        render_traffic_attribution_tab()
         
     with tab8:
         render_traffic_attribution_tab()
