@@ -4639,6 +4639,10 @@ def generate_attribution_insights(results):
 def create_attribution_summary_report(results):
     """Create downloadable traffic attribution report"""
     
+    pos_delta_str = f"{results['pos_delta']:+.1f}" if results['pos_delta'] is not None else 'N/A'
+    pos_now_str = f"{results['weighted_pos_now']:.1f}" if results['weighted_pos_now'] is not None else 'N/A'
+    pos_prev_str = f"{results['weighted_pos_prev']:.1f}" if results['weighted_pos_prev'] is not None else 'N/A'
+    
     report = f"""
 TRAFFIC ATTRIBUTION ANALYSIS REPORT
 Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
@@ -4654,7 +4658,7 @@ Key Metrics Changes:
 - Total Clicks: {results['clicks_delta']:,} ({results['clicks_pct_change']:+.1f}%)
 - Total Impressions: {results['impr_delta']:,} ({results['impr_pct_change']:+.1f}%)  
 - Weighted CTR: {results['ctr_delta_pp']:+.2f}pp (now {results['weighted_ctr_now']:.2f}%)
-- Weighted Position: {results['pos_delta']:+.1f if results['pos_delta'] else 'N/A'} (now {results['weighted_pos_now']:.1f if results['weighted_pos_now'] else 'N/A'})
+- Weighted Position: {pos_delta_str} (now {pos_now_str})
 
 ===========================================
 DETAILED PERFORMANCE BREAKDOWN
@@ -4664,13 +4668,13 @@ Current Period:
 - Clicks: {results['total_clicks_now']:,.0f}
 - Impressions: {results['total_impr_now']:,.0f}
 - Weighted CTR: {results['weighted_ctr_now']:.2f}%
-- Weighted Position: {results['weighted_pos_now']:.1f if results['weighted_pos_now'] else 'N/A'}
+- Weighted Position: {pos_now_str}
 
 Previous Period:
 - Clicks: {results['total_clicks_prev']:,.0f}  
 - Impressions: {results['total_impr_prev']:,.0f}
 - Weighted CTR: {results['weighted_ctr_prev']:.2f}%
-- Weighted Position: {results['weighted_pos_prev']:.1f if results['weighted_pos_prev'] else 'N/A'}
+- Weighted Position: {pos_prev_str}
 
 ===========================================
 GA4 VALIDATION DATA
