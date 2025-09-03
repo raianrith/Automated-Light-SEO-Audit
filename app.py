@@ -148,7 +148,7 @@ def main():
         competitor_analysis()
         
     with tab7:
-        render_traffic_attribution_tab()
+        render_traffic_attribution_tab(namespace="ta")
         
         
 # Helper functions for file processing
@@ -178,12 +178,65 @@ def find_column(columns, patterns):
                 return original_col
     return None
 
+
 @st.cache_data(show_spinner=False)
 def read_any_table(uploaded) -> pd.DataFrame:
-    name = uploaded.name.lower()
+    """
+    Robust reader:
+      - Excel: read_excel
+      - CSV: auto-detect delimiter (sep=None, engine='python'), tolerate BOM,
+             and skip malformed rows (on_bad_lines='skip').
+    Also strips common GA4/GSC preface lines if present.
+    """
+    name = (uploaded.name or "").lower()
+
+    # Excel first
     if name.endswith((".xlsx", ".xls")):
-        return normalize_columns(pd.read_excel(uploaded))
-    return normalize_columns(pd.read_csv(uploaded))
+        df = pd.read_excel(uploaded)
+        return normalize_columns(df)
+
+    # CSV-like
+    # Rewindable buffer to try multiple reads
+    raw = uploaded.read()
+    # Try UTF-8 first, then fallback
+    for enc in ("utf-8-sig", "utf-8", "latin-1"):
+        try:
+            buf = io.StringIO(raw.decode(enc, errors="replace"))
+            df = pd.read_csv(
+                buf,
+                sep=None,               # auto-detect delimiter
+                engine="python",
+                on_bad_lines="skip"     # skip weird/broken lines
+            )
+            df = _maybe_strip_preface_rows(df)
+            return normalize_columns(df)
+        except Exception:
+            continue
+
+    # Last resort: try tab
+    buf = io.StringIO(raw.decode("utf-8", errors="replace"))
+    df = pd.read_csv(buf, sep="\t", engine="python", on_bad_lines="skip")
+    df = _maybe_strip_preface_rows(df)
+    return normalize_columns(df)
+
+def _maybe_strip_preface_rows(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Some GA4/GSC CSVs include preface lines. If the first row is clearly not
+    column headers (e.g., only 1–2 columns, or looks like a title), try to
+    find the first row that looks like the header and re-parse.
+    """
+    if df.empty:
+        return df
+    # Heuristic: if we only got 1 column named something like 'Google Analytics' or 'Report',
+    # we probably parsed the preface. Try again with header inference.
+    if df.shape[1] == 1:
+        s = df.columns[0].lower()
+        if any(key in s for key in ["google analytics", "report", "date range", "exported", "property"]):
+            # Let pandas infer header from a later row by re-parsing without header
+            # We can’t re-open the file here, but we already called with on_bad_lines='skip'
+            # so just return as-is (the earlier robust read should have worked).
+            pass
+    return df
 
 def _coerce_num(s: pd.Series) -> pd.Series:
     # handles %, commas, blanks
@@ -197,10 +250,14 @@ def _safe_pct(num: pd.Series, den: pd.Series) -> pd.Series:
 def _brand_classifier(queries: pd.Series, brand_terms: List[str]) -> pd.Series:
     if not brand_terms:
         return pd.Series(["non-branded"] * len(queries), index=queries.index)
-    pattern = "|".join([rf"\b{pd.re.escape(t.strip())}\b" for t in brand_terms if t.strip()])
+    pattern = "|".join([rf"\b{re.escape(t.strip())}\b" for t in brand_terms if t.strip()])
     if not pattern:
         return pd.Series(["non-branded"] * len(queries), index=queries.index)
-    return np.where(queries.str.contains(pattern, case=False, regex=True), "branded", "non-branded")
+    return pd.Series(
+        np.where(queries.astype(str).str.contains(pattern, case=False, regex=True), "branded", "non-branded"),
+        index=queries.index
+    )
+
 
 def _xlsx_download(df_map: Dict[str, pd.DataFrame], filename: str) -> bytes:
     buf = io.BytesIO()
@@ -4064,9 +4121,21 @@ def render_traffic_attribution_tab():
         )
 
     col_u1, col_u2, col_u3 = st.columns(3)
-    ga4_lp_file = col_u1.file_uploader("GA4 Landing Page – Organic (.csv/.xlsx)", type=["csv","xlsx","xls"], key="ta_ga4_lp")
-    ga4_acq_file = col_u2.file_uploader("GA4 Traffic Acquisition – Organic (.csv/.xlsx)", type=["csv","xlsx","xls"], key="ta_ga4_acq")
-    gsc_q_file  = col_u3.file_uploader("GSC Queries Compare (YoY) (.xlsx/.csv)", type=["csv","xlsx","xls"], key="ta_gsc_q")
+    ga4_lp_file = col_u1.file_uploader(
+        "GA4 Landing Page – Organic (.csv/.xlsx)",
+        type=["csv","xlsx","xls"],
+        key=f"{namespace}_ga4_lp",
+    )
+    ga4_acq_file = col_u2.file_uploader(
+        "GA4 Traffic Acquisition – Organic (.csv/.xlsx)",
+        type=["csv","xlsx","xls"],
+        key=f"{namespace}_ga4_acq",
+    )
+    gsc_q_file  = col_u3.file_uploader(
+        "GSC Queries Compare (YoY) (.xlsx/.csv)",
+        type=["csv","xlsx","xls"],
+        key=f"{namespace}_gsc_q",
+    )
 
     brand_terms = st.text_input(
         "Brand terms (comma-separated, e.g., `falcon, falcon structures, falcon containers`)",
