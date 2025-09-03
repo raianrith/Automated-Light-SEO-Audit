@@ -4035,92 +4035,6 @@ STRATEGIC INSIGHTS
     return report
 
 def traffic_attribution_analysis():
-    """Analyze sitewide traffic attribution from GSC"""
-    st.markdown('<div class="section-header">📈 Traffic Attribution Analysis</div>', unsafe_allow_html=True)
-    
-    st.markdown("""
-    <div class="instruction-box">
-        <h4>📋 What This Section Analyzes:</h4>
-        <p>This analysis examines your overall organic performance to understand:</p>
-        <ul>
-            <li><b>Sitewide clicks & impressions</b> - Total organic performance YoY</li>
-            <li><b>CTR trends</b> - Whether click-through rates are improving</li>
-            <li><b>Position changes</b> - Average ranking movement impact</li>
-            <li><b>Demand vs execution</b> - Separate impression growth from CTR issues</li>
-        </ul>
-        
-        <h4>📁 Required Files:</h4>
-        <p>You need <b>1-2 files</b>:</p>
-        <ul>
-            <li><b>GSC Search Results Compare</b> - Sitewide performance comparison</li>
-            <li><b>GA4 Traffic Acquisition</b> - Optional: validate organic session impact</li>
-        </ul>
-        
-        <h4>🎯 Key Insights You'll Get:</h4>
-        <ul>
-            <li>Total clicks and impressions YoY changes</li>
-            <li>Weighted CTR and position analysis</li>
-            <li>Traffic pattern interpretation</li>
-            <li>Business impact validation</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.info("🚧 This section will analyze sitewide GSC performance with weighted metrics!")
-
-def create_visibility_summary_report(results):
-    """Create a downloadable summary report"""
-    
-    report = f"""
-KEYWORD VISIBILITY ANALYSIS REPORT
-Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-
-===========================================
-EXECUTIVE SUMMARY
-===========================================
-
-Total Keywords Comparison:
-• Previous Period: {results['total_previous']:,} keywords
-• Current Period: {results['total_current']:,} keywords
-• Change: {results['total_change']:,} keywords ({results['total_change_pct']:.1f}%)
-
-Ranking Quality Distribution (Current Period):
-• Top 3 Positions: {results['bucket_changes']['top_3']['current']} ({results['bucket_changes']['top_3']['current_share']:.1f}%)
-• Positions 4-10: {results['bucket_changes']['top_4_10']['current']} ({results['bucket_changes']['top_4_10']['current_share']:.1f}%)
-• Positions 11-20: {results['bucket_changes']['top_11_20']['current']} ({results['bucket_changes']['top_11_20']['current_share']:.1f}%)
-• Positions 21+: {results['bucket_changes']['top_21_plus']['current']} ({results['bucket_changes']['top_21_plus']['current_share']:.1f}%)
-
-===========================================
-DETAILED CHANGES BY RANKING BUCKET
-===========================================
-
-Top 3 Rankings:
-• Previous: {results['bucket_changes']['top_3']['previous']} | Current: {results['bucket_changes']['top_3']['current']}
-• Change: {results['bucket_changes']['top_3']['change']} ({results['bucket_changes']['top_3']['change_pct']:.1f}%)
-
-Positions 4-10:
-• Previous: {results['bucket_changes']['top_4_10']['previous']} | Current: {results['bucket_changes']['top_4_10']['current']}
-• Change: {results['bucket_changes']['top_4_10']['change']} ({results['bucket_changes']['top_4_10']['change_pct']:.1f}%)
-
-Positions 11-20:
-• Previous: {results['bucket_changes']['top_11_20']['previous']} | Current: {results['bucket_changes']['top_11_20']['current']}
-• Change: {results['bucket_changes']['top_11_20']['change']} ({results['bucket_changes']['top_11_20']['change_pct']:.1f}%)
-
-Positions 21+:
-• Previous: {results['bucket_changes']['top_21_plus']['previous']} | Current: {results['bucket_changes']['top_21_plus']['current']}
-• Change: {results['bucket_changes']['top_21_plus']['change']} ({results['bucket_changes']['top_21_plus']['change_pct']:.1f}%)
-
-===========================================
-RECOMMENDATIONS
-===========================================
-
-{generate_visibility_insights(results).replace('<b>', '').replace('</b>', '').replace('<br><br>', '\n\n').replace('🟢', '• ').replace('🟡', '• ').replace('🔴', '• ').replace('🟨', '• ').replace('🎯', '• ').replace('⚠️', '• ')}
-
-===========================================
-"""
-    return report
-
-def traffic_attribution_analysis():
     """Analyze sitewide traffic attribution from GSC and GA4"""
     st.markdown('<div class="section-header">📈 Traffic Attribution Analysis</div>', unsafe_allow_html=True)
     
@@ -4154,20 +4068,26 @@ def traffic_attribution_analysis():
         
         | File | Purpose | Export From |
         |------|---------|-------------|
-        | **GSC Search Results Compare** | Primary sitewide analysis | Search Console → Search Results (Compare view) |
+        | **GSC Queries Compare** | Primary sitewide analysis | Search Console → Search Results → Queries (Compare view) |
         | **GA4 Traffic Acquisition** | Optional validation | Reports → Acquisition → Traffic Acquisition |
         
         **📋 GSC Export Steps:**
         1. Go to Search Results in Google Search Console
         2. Set: Search type = Web
         3. Set: Date → Compare → Last 3 months vs Same period last year
-        4. Export → CSV or Excel (main Search Results tab)
+        4. Click **Queries** tab (not main Search Results)
+        5. Export → Excel or CSV
         
         **📋 GA4 Export Steps (Optional):**
         1. Reports → Acquisition → Traffic acquisition
         2. Same date range as GSC
         3. Filter: Session default channel group = "Organic Search"
         4. Share report → Download CSV
+        
+        **📋 Expected File Format:**
+        - Your GSC queries file should work perfectly
+        - GA4 files can be the standard traffic acquisition export
+        - Both CSV and Excel formats are supported
         """)
     
     # Key insights preview
@@ -4211,12 +4131,12 @@ def traffic_attribution_analysis():
     col1, col2 = st.columns(2)
     
     with col1:
-        st.markdown("#### 📊 GSC Search Results Compare (Required)")
+        st.markdown("#### 📊 GSC Queries Compare (Required)")
         gsc_search_file = st.file_uploader(
-            "Upload GSC Search Results Compare file",
+            "Upload GSC Queries Compare file",
             type=['csv', 'xlsx', 'xls'],
             key="gsc_search_compare",
-            help="Export from GSC: Search Results → Compare view (sitewide data)"
+            help="Export from GSC: Search Results → Queries → Compare view"
         )
         
     with col2:
@@ -4237,13 +4157,15 @@ def traffic_attribution_analysis():
         if run_attribution_analysis:
             with st.spinner("🔄 Analyzing traffic attribution..."):
                 try:
-                    # Load and validate data
-                    gsc_df = normalize_columns(read_uploaded_file(gsc_search_file))
+                    # Load and validate data with improved error handling
+                    gsc_df = read_uploaded_file_safe(gsc_search_file)
+                    gsc_df = normalize_columns(gsc_df)
                     
                     # Optional GA4 data
                     ga4_df = None
                     if ga4_traffic_file is not None:
-                        ga4_df = normalize_columns(read_uploaded_file(ga4_traffic_file))
+                        ga4_df = read_uploaded_file_safe(ga4_traffic_file)
+                        ga4_df = normalize_columns(ga4_df)
                     
                     # Validate required columns
                     validation_passed, validation_message = validate_attribution_data(gsc_df)
@@ -4260,43 +4182,74 @@ def traffic_attribution_analysis():
                     
                 except Exception as e:
                     st.error(f"❌ Error processing files: {str(e)}")
-                    st.info("💡 Please ensure you've uploaded valid GSC Search Results Compare file")
+                    st.info("💡 Please ensure you've uploaded a valid GSC Queries Compare file")
     else:
-        st.info("📤 Please upload a GSC Search Results Compare file to begin analysis")
+        st.info("📤 Please upload a GSC Queries Compare file to begin analysis")
 
+def read_uploaded_file_safe(uploaded_file):
+    """Read uploaded CSV or Excel file with better error handling"""
+    if uploaded_file is not None:
+        file_name = uploaded_file.name.lower()
+        try:
+            if file_name.endswith('.xlsx') or file_name.endswith('.xls'):
+                # Try reading Excel file
+                df = pd.read_excel(uploaded_file)
+                return df
+            else:
+                # Try different CSV reading approaches
+                try:
+                    # First try standard CSV
+                    df = pd.read_csv(uploaded_file)
+                    return df
+                except:
+                    # Reset file pointer and try with different separator
+                    uploaded_file.seek(0)
+                    df = pd.read_csv(uploaded_file, sep=';')
+                    return df
+        except Exception as e:
+            st.error(f"Could not read file {uploaded_file.name}: {str(e)}")
+            st.info("Try saving your file as CSV with comma separators, or as Excel format")
+            return None
+    return None
 
 def validate_attribution_data(df):
-    """Validate GSC Search Results Compare data"""
+    """Validate GSC Queries Compare data - Updated for your file structure"""
     
-    # Look for typical GSC sitewide columns
+    if df is None or len(df) == 0:
+        return False, "❌ File appears to be empty or could not be read"
+    
+    # Show available columns for debugging
+    st.info(f"📋 Detected columns: {list(df.columns)}")
+    
+    # Look for GSC query comparison columns (more flexible matching)
+    query_col = find_column(df.columns, ['top queries', 'query'])
     clicks_current = find_column(df.columns, ['last 3 months clicks', 'clicks'])
     clicks_previous = find_column(df.columns, ['previous 3 months clicks', 'same period last year clicks'])
     impressions_current = find_column(df.columns, ['last 3 months impressions', 'impressions'])
     impressions_previous = find_column(df.columns, ['previous 3 months impressions', 'same period last year impressions'])
     
     missing_columns = []
+    if not query_col:
+        missing_columns.append('Query column')
     if not clicks_current:
         missing_columns.append('Current Period Clicks')
     if not clicks_previous:
-        missing_columns.append('Previous Period Clicks')
+        missing_columns.append('Previous Period Clicks')  
     if not impressions_current:
         missing_columns.append('Current Period Impressions')
     if not impressions_previous:
         missing_columns.append('Previous Period Impressions')
     
     if missing_columns:
-        return False, f"❌ Missing required columns: {missing_columns}. Available columns: {list(df.columns)[:10]}"
-    
-    if len(df) == 0:
-        return False, "❌ File appears to be empty"
+        return False, f"❌ Missing required columns: {missing_columns}."
     
     return True, "✅ Data validation passed"
 
-
 def analyze_traffic_attribution(gsc_df, ga4_df=None):
-    """Analyze traffic attribution following the prototype methodology"""
+    """Analyze traffic attribution - Updated to work with query-level data"""
     
     # Find GSC columns
+    query_col = find_column(gsc_df.columns, ['top queries', 'query'])
     clicks_now = find_column(gsc_df.columns, ['last 3 months clicks', 'clicks'])
     clicks_prev = find_column(gsc_df.columns, ['previous 3 months clicks', 'same period last year clicks'])
     impr_now = find_column(gsc_df.columns, ['last 3 months impressions', 'impressions'])
@@ -4306,7 +4259,7 @@ def analyze_traffic_attribution(gsc_df, ga4_df=None):
     pos_now = find_column(gsc_df.columns, ['last 3 months position', 'position'])
     pos_prev = find_column(gsc_df.columns, ['previous 3 months position', 'same period last year position'])
     
-    # Calculate sitewide totals
+    # Calculate sitewide totals by summing all queries
     total_clicks_now = pd.to_numeric(gsc_df[clicks_now], errors='coerce').sum()
     total_clicks_prev = pd.to_numeric(gsc_df[clicks_prev], errors='coerce').sum()
     total_impr_now = pd.to_numeric(gsc_df[impr_now], errors='coerce').sum()
@@ -4323,10 +4276,9 @@ def analyze_traffic_attribution(gsc_df, ga4_df=None):
     weighted_ctr_prev = (total_clicks_prev / total_impr_prev * 100) if total_impr_prev > 0 else 0
     ctr_delta_pp = weighted_ctr_now - weighted_ctr_prev
     
-    # Calculate weighted position if available
+    # Calculate impression-weighted position if available
     weighted_pos_now = weighted_pos_prev = pos_delta = None
     if pos_now and pos_prev:
-        # Weight by impressions for more accurate position
         pos_now_series = pd.to_numeric(gsc_df[pos_now], errors='coerce')
         pos_prev_series = pd.to_numeric(gsc_df[pos_prev], errors='coerce')
         impr_now_series = pd.to_numeric(gsc_df[impr_now], errors='coerce')
@@ -4375,7 +4327,6 @@ def analyze_traffic_attribution(gsc_df, ga4_df=None):
         'raw_data': gsc_df
     }
 
-
 def analyze_ga4_traffic(ga4_df):
     """Analyze GA4 organic traffic data for validation"""
     
@@ -4420,7 +4371,6 @@ def analyze_ga4_traffic(ga4_df):
     
     return analysis
 
-
 def analyze_performance_pattern(clicks_delta, impr_delta, ctr_delta_pp, pos_delta):
     """Analyze performance pattern to provide insights"""
     
@@ -4464,7 +4414,6 @@ def analyze_performance_pattern(clicks_delta, impr_delta, ctr_delta_pp, pos_delt
             'color': 'info',
             'icon': '📊'
         }
-
 
 def display_attribution_results(results):
     """Display traffic attribution analysis results"""
@@ -4646,7 +4595,6 @@ def display_attribution_results(results):
             mime="text/csv"
         )
 
-
 def generate_attribution_insights(results):
     """Generate strategic insights from traffic attribution analysis"""
     insights = []
@@ -4688,7 +4636,6 @@ def generate_attribution_insights(results):
     
     return "<br><br>".join(insights)
 
-
 def create_attribution_summary_report(results):
     """Create downloadable traffic attribution report"""
     
@@ -4704,26 +4651,26 @@ Performance Pattern: {results['performance_pattern']['description']}
 {results['performance_pattern']['detail']}
 
 Key Metrics Changes:
-• Total Clicks: {results['clicks_delta']:,} ({results['clicks_pct_change']:+.1f}%)
-• Total Impressions: {results['impr_delta']:,} ({results['impr_pct_change']:+.1f}%)  
-• Weighted CTR: {results['ctr_delta_pp']:+.2f}pp (now {results['weighted_ctr_now']:.2f}%)
-• Weighted Position: {results['pos_delta']:+.1f if results['pos_delta'] else 'N/A'} (now {results['weighted_pos_now']:.1f if results['weighted_pos_now'] else 'N/A'})
+- Total Clicks: {results['clicks_delta']:,} ({results['clicks_pct_change']:+.1f}%)
+- Total Impressions: {results['impr_delta']:,} ({results['impr_pct_change']:+.1f}%)  
+- Weighted CTR: {results['ctr_delta_pp']:+.2f}pp (now {results['weighted_ctr_now']:.2f}%)
+- Weighted Position: {results['pos_delta']:+.1f if results['pos_delta'] else 'N/A'} (now {results['weighted_pos_now']:.1f if results['weighted_pos_now'] else 'N/A'})
 
 ===========================================
 DETAILED PERFORMANCE BREAKDOWN
 ===========================================
 
 Current Period:
-• Clicks: {results['total_clicks_now']:,.0f}
-• Impressions: {results['total_impr_now']:,.0f}
-• Weighted CTR: {results['weighted_ctr_now']:.2f}%
-• Weighted Position: {results['weighted_pos_now']:.1f if results['weighted_pos_now'] else 'N/A'}
+- Clicks: {results['total_clicks_now']:,.0f}
+- Impressions: {results['total_impr_now']:,.0f}
+- Weighted CTR: {results['weighted_ctr_now']:.2f}%
+- Weighted Position: {results['weighted_pos_now']:.1f if results['weighted_pos_now'] else 'N/A'}
 
 Previous Period:
-• Clicks: {results['total_clicks_prev']:,.0f}  
-• Impressions: {results['total_impr_prev']:,.0f}
-• Weighted CTR: {results['weighted_ctr_prev']:.2f}%
-• Weighted Position: {results['weighted_pos_prev']:.1f if results['weighted_pos_prev'] else 'N/A'}
+- Clicks: {results['total_clicks_prev']:,.0f}  
+- Impressions: {results['total_impr_prev']:,.0f}
+- Weighted CTR: {results['weighted_ctr_prev']:.2f}%
+- Weighted Position: {results['weighted_pos_prev']:.1f if results['weighted_pos_prev'] else 'N/A'}
 
 ===========================================
 GA4 VALIDATION DATA
