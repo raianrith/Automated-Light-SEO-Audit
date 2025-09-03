@@ -119,15 +119,14 @@ def main():
         """)
     
     # Enhanced tab navigation with more sections
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "📋 Data Export Guide",
         "📊 Visibility Trends", 
         "🔄 Keyword Movement", 
         "📄 Page Performance",
         "🎯 Query Analysis",
         "🏁 Competitor Gaps",
-        "📈 Traffic Attribution", 
-        "🚧 More Soon"
+        "📈 Traffic Attribution"
     ])
     
     with tab1:
@@ -151,8 +150,6 @@ def main():
     with tab7:
         render_traffic_attribution_tab()
         
-    with tab8:
-        render_traffic_attribution_tab()
         
 # Helper functions for file processing
 def read_uploaded_file(uploaded_file):
