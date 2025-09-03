@@ -40,11 +40,11 @@ st.markdown("""
         font-weight: 600;
         color: #2c3e50;
         margin: 2rem 0 1rem 0;
-        padding: 0.6rem 1rem;
-        border-left: 4px solid #3498db;
-        background: #fafafa;
-        border-radius: 6px;
+        padding-bottom: 0.3rem;
+        border-bottom: 2px solid #3498db; /* subtle accent */
+        letter-spacing: 0.5px;
     }
+
         
     .instruction-box {
         background-color: #f0f8ff;
