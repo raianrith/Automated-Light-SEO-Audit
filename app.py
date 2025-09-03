@@ -20,15 +20,19 @@ st.set_page_config(
 st.markdown("""
 <style>
     .main-header {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #1f77b4;
+        font-size: 2rem;
+        font-weight: 600;
+        color: #2c3e50;
         text-align: center;
         margin-bottom: 2rem;
-        padding: 1rem;
-        background: linear-gradient(90deg, #f0f8ff, #e6f3ff);
-        border-radius: 10px;
-        border-left: 5px solid #1f77b4;
+        padding: 1rem 0;
+        background-color: #f9f9f9;
+        border-radius: 12px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+        letter-spacing: 0.5px;
+    }
+    .main-header span {
+        color: #1f77b4; /* accent color */
     }
     
     .section-header {
@@ -86,7 +90,7 @@ st.markdown("""
 
 def main():
     # Main header
-    st.markdown('<div class="main-header">🚀 SEO Performance Analyzer</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header">🚀 <span>SEO Performance Analyzer</span></div>',, unsafe_allow_html=True)
     
     # Sidebar guide
     with st.sidebar:
