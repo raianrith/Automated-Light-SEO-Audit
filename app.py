@@ -684,7 +684,7 @@ def data_export_instructions():
         unsafe_allow_html=True
     )
 
-
+    st.markdown("<div style='margin-top:30px;'></div>", unsafe_allow_html=True)
     
     # Create expandable sections for each tool
     with st.expander("🔍 **Semrush Exports** - Keyword Rankings & Competition Data", expanded=True):
