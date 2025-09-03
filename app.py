@@ -4034,6 +4034,32 @@ STRATEGIC INSIGHTS
     
     return report
 
+def read_uploaded_file_safe(uploaded_file):
+    """Read uploaded CSV or Excel file with better error handling"""
+    if uploaded_file is not None:
+        file_name = uploaded_file.name.lower()
+        try:
+            if file_name.endswith('.xlsx') or file_name.endswith('.xls'):
+                # Try reading Excel file
+                df = pd.read_excel(uploaded_file)
+                return df
+            else:
+                # Try different CSV reading approaches
+                try:
+                    # First try standard CSV
+                    df = pd.read_csv(uploaded_file)
+                    return df
+                except:
+                    # Reset file pointer and try with different separator
+                    uploaded_file.seek(0)
+                    df = pd.read_csv(uploaded_file, sep=';')
+                    return df
+        except Exception as e:
+            st.error(f"Could not read file {uploaded_file.name}: {str(e)}")
+            st.info("Try saving your file as CSV with comma separators, or as Excel format")
+            return None
+    return None
+
 def traffic_attribution_analysis():
     """Analyze comprehensive traffic attribution from GSC and GA4"""
     st.markdown('<div class="section-header">📈 Traffic Attribution Analysis</div>', unsafe_allow_html=True)
