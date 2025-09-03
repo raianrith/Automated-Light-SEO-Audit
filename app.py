@@ -129,8 +129,7 @@ def main():
         "📄 Page Performance",
         "🎯 Query Analysis",
         "🏁 Competitor Gaps",
-        "📈 Traffic Attribution", 
-        "🚧 More Soon"
+        "📈 Traffic Attribution (Not Complete)"
     ])
     
     with tab1:
@@ -154,35 +153,6 @@ def main():
     with tab7:
         traffic_attribution_analysis()
         
-    with tab8:
-        st.markdown("""
-        ### 🚀 Future Analysis Modules:
-        
-        **🤖 SERP Features Impact**
-        - AI Overviews presence & inclusion rates
-        - Featured snippets analysis
-        - SERP feature CTR impact
-        
-        **🔧 Technical SEO Health** 
-        - Core Web Vitals tracking
-        - Crawl error analysis
-        - Index coverage insights
-        
-        **📱 Mobile Performance**
-        - Mobile vs desktop rankings
-        - Mobile usability issues
-        - AMP performance analysis
-        
-        **🌍 Local SEO Analysis**
-        - Local pack rankings
-        - GMB performance metrics
-        - Local citation analysis
-        
-        *Each module will include interactive charts, automated insights, and actionable recommendations!*
-        """)
-        
-        st.markdown("---")
-        st.markdown("**💬 Have specific analysis needs? The framework is designed to be extensible!**")
 
 # Helper functions for file processing
 def read_uploaded_file(uploaded_file):
