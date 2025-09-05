@@ -7,6 +7,9 @@ import numpy as np
 import re
 from datetime import datetime
 import io
+from docx import Document
+from docx.shared import Pt
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 # Configure page
 st.set_page_config(
@@ -122,14 +125,15 @@ def main():
         """)
     
     # Enhanced tab navigation with more sections
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab_report = st.tabs([
         "📋 Data Export Guide",
         "📊 Visibility Trends", 
         "🔄 Keyword Movement", 
         "📄 Page Performance",
         "🎯 Query Analysis",
         "🏁 Competitor Gaps",
-        "📈 Traffic Attribution (Not Complete)"
+        "📈 Traffic Attribution (Not Complete)",
+        "📝 Comprehensive Report"
     ])
     
     with tab1:
@@ -152,9 +156,127 @@ def main():
         
     with tab7:
         traffic_attribution_analysis()
+
+    with tab_report:
+        comprehensive_report_tab()
+
         
 
 # Helper functions for file processing
+def _docx_add_heading(doc: Document, text: str, level: int = 1):
+    h = doc.add_heading(text, level=level)
+    # optional: tighten spacing a touch
+    for run in h.runs:
+        run.font.size = Pt(12)
+
+
+def _docx_add_kv(doc: Document, k: str, v: str):
+    p = doc.add_paragraph()
+    p.add_run(f"{k}: ").bold = True
+    p.add_run(v)
+
+
+def _docx_add_dataframe_preview(doc: Document, df: pd.DataFrame, max_rows: int = 10):
+    """
+    Add a small table preview to the Word doc. No charts—just a text table.
+    """
+    preview = df.head(max_rows)
+    table = doc.add_table(rows=len(preview) + 1, cols=len(preview.columns))
+    table.style = "Light List"
+    # header
+    hdr_cells = table.rows[0].cells
+    for j, col in enumerate(preview.columns):
+        hdr_cells[j].text = str(col)
+    # rows
+    for i in range(len(preview)):
+        row_cells = table.rows[i + 1].cells
+        for j, col in enumerate(preview.columns):
+            row_cells[j].text = "" if pd.isna(preview.iloc[i, j]) else str(preview.iloc[i, j])
+
+
+def build_docx_report_from_uploads(files: list) -> bytes:
+    """
+    Build a .docx report that simply documents what's in the uploaded files:
+    - filename
+    - detected type
+    - basic shape & columns for tabular files (CSV/XLS/XLSX)
+    - small preview table for tabular files
+    - first N chars for text-like files (TXT/JSON/HTML)
+    """
+    doc = Document()
+
+    # Title
+    title = doc.add_heading("Comprehensive SEO Audit Report", level=0)
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    _docx_add_kv(doc, "Generated", pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+    doc.add_paragraph()  # spacer
+    doc.add_heading("Contents", level=1)
+
+    if not files:
+        doc.add_paragraph("No files were provided.")
+    else:
+        # quick TOC-like list
+        for i, f in enumerate(files, start=1):
+            doc.add_paragraph(f"{i}. {getattr(f, 'name', 'uploaded_file')}", style=None)
+
+        doc.add_page_break()
+
+        for i, f in enumerate(files, start=1):
+            name = getattr(f, "name", f"uploaded_file_{i}")
+            suffix = name.split(".")[-1].lower() if "." in name else ""
+
+            doc.add_heading(f"{i}. {name}", level=1)
+            _docx_add_kv(doc, "Type", suffix.upper() if suffix else "Unknown")
+
+            try:
+                f.seek(0)  # important for re-reads
+                if suffix in {"csv"}:
+                    df = pd.read_csv(f)
+                    _docx_add_kv(doc, "Rows", str(len(df)))
+                    _docx_add_kv(doc, "Columns", str(len(df.columns)))
+                    _docx_add_kv(doc, "Column Names", ", ".join(map(str, df.columns.tolist())))
+                    doc.add_paragraph()  # spacer
+                    _docx_add_dataframe_preview(doc, df)
+
+                elif suffix in {"xlsx", "xls"}:
+                    df = pd.read_excel(f)
+                    _docx_add_kv(doc, "Rows", str(len(df)))
+                    _docx_add_kv(doc, "Columns", str(len(df.columns)))
+                    _docx_add_kv(doc, "Column Names", ", ".join(map(str, df.columns.tolist())))
+                    doc.add_paragraph()
+                    _docx_add_dataframe_preview(doc, df)
+
+                elif suffix in {"json", "txt", "html", "htm"}:
+                    # Text-like: include the first N characters so the file is represented
+                    f.seek(0)
+                    content = f.read()
+                    if isinstance(content, bytes):
+                        try:
+                            content = content.decode("utf-8", errors="replace")
+                        except Exception:
+                            content = str(content)
+                    preview = content[:4000]  # keep it manageable
+                    doc.add_paragraph(preview)
+
+                else:
+                    doc.add_paragraph(
+                        "This file type is not parsed for tabular preview. It is listed here for record."
+                    )
+
+            except Exception as e:
+                doc.add_paragraph(f"⚠️ Could not read/preview this file: {e}")
+
+            doc.add_page_break()
+
+    # finalize
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return buf.getvalue()
+
+
 def read_uploaded_file(uploaded_file):
     """Read uploaded CSV or Excel file"""
     if uploaded_file is not None:
@@ -4750,6 +4872,46 @@ STRATEGIC INSIGHTS
 """
     
     return report
+    
+def comprehensive_report_tab():
+    st.header("📝 Comprehensive Report (.docx)")
+
+    st.write(
+        "Upload the same files you used in the other tabs. "
+        "This tab won’t render any charts—"
+        "it will compile a single Word document you can download."
+    )
+
+    uploads = st.file_uploader(
+        "Upload files (CSV, XLSX, XLS, JSON, TXT, HTML):",
+        type=["csv", "xlsx", "xls", "json", "txt", "html", "htm"],
+        accept_multiple_files=True,
+        key="report_uploads",
+    )
+
+    generate = st.button("Generate Word Report", type="primary", use_container_width=True)
+
+    if generate:
+        if not uploads:
+            st.warning("Please upload at least one file.")
+            return
+
+        with st.spinner("Compiling Word document..."):
+            docx_bytes = build_docx_report_from_uploads(uploads)
+
+        st.success("Report ready!")
+        st.download_button(
+            label="📄 Download Comprehensive SEO Report",
+            data=docx_bytes,
+            file_name="SEO_Audit_Report.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            use_container_width=True,
+        )
+
+    st.caption(
+        "Tip: If you already uploaded files in other tabs and stored them in session state, "
+        "you can re-upload them here—or extend this tab to pull from session directly."
+    )
 
 if __name__ == "__main__":
     main()
