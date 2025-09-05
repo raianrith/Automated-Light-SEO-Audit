@@ -122,14 +122,15 @@ def main():
         """)
     
     # Enhanced tab navigation with more sections
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab_report = st.tabs([
         "📋 Data Export Guide",
         "📊 Visibility Trends", 
         "🔄 Keyword Movement", 
         "📄 Page Performance",
         "🎯 Query Analysis",
         "🏁 Competitor Gaps",
-        "📈 Traffic Attribution (Not Complete)"
+        "📈 Traffic Attribution (Not Complete)",
+        "📝 Comprehensive Report" 
     ])
     
     with tab1:
@@ -153,7 +154,9 @@ def main():
     with tab7:
         traffic_attribution_analysis()
         
-
+    with tab_report:
+        comprehensive_report_tab()
+    
 # Helper functions for file processing
 def read_uploaded_file(uploaded_file):
     """Read uploaded CSV or Excel file"""
