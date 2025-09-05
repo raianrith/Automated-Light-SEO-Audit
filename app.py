@@ -8,8 +8,10 @@ import re
 from datetime import datetime
 import io
 from docx import Document
-from docx.shared import Pt
+from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+import matplotlib.pyplot as plt
+
 
 # Configure page
 st.set_page_config(
@@ -163,112 +165,367 @@ def main():
         
 
 # Helper functions for file processing
-def _docx_add_heading(doc: Document, text: str, level: int = 1):
-    h = doc.add_heading(text, level=level)
-    # optional: tighten spacing a touch
-    for run in h.runs:
-        run.font.size = Pt(12)
 
-
-def _docx_add_kv(doc: Document, k: str, v: str):
-    p = doc.add_paragraph()
-    p.add_run(f"{k}: ").bold = True
-    p.add_run(v)
-
-
-def _docx_add_dataframe_preview(doc: Document, df: pd.DataFrame, max_rows: int = 10):
-    """
-    Add a small table preview to the Word doc. No charts—just a text table.
-    """
-    preview = df.head(max_rows)
-    table = doc.add_table(rows=len(preview) + 1, cols=len(preview.columns))
-    table.style = "Light List"
-    # header
-    hdr_cells = table.rows[0].cells
-    for j, col in enumerate(preview.columns):
-        hdr_cells[j].text = str(col)
-    # rows
-    for i in range(len(preview)):
-        row_cells = table.rows[i + 1].cells
-        for j, col in enumerate(preview.columns):
-            row_cells[j].text = "" if pd.isna(preview.iloc[i, j]) else str(preview.iloc[i, j])
-
-
-def build_docx_report_from_uploads(files: list) -> bytes:
-    """
-    Build a .docx report that simply documents what's in the uploaded files:
-    - filename
-    - detected type
-    - basic shape & columns for tabular files (CSV/XLS/XLSX)
-    - small preview table for tabular files
-    - first N chars for text-like files (TXT/JSON/HTML)
-    """
-    doc = Document()
-
-    # Title
-    title = doc.add_heading("Comprehensive SEO Audit Report", level=0)
-    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-
-    _docx_add_kv(doc, "Generated", pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"))
-
-    doc.add_paragraph()  # spacer
-    doc.add_heading("Contents", level=1)
-
-    if not files:
-        doc.add_paragraph("No files were provided.")
-    else:
-        # quick TOC-like list
-        for i, f in enumerate(files, start=1):
-            doc.add_paragraph(f"{i}. {getattr(f, 'name', 'uploaded_file')}", style=None)
-
-        doc.add_page_break()
-
-        for i, f in enumerate(files, start=1):
-            name = getattr(f, "name", f"uploaded_file_{i}")
-            suffix = name.split(".")[-1].lower() if "." in name else ""
-
-            doc.add_heading(f"{i}. {name}", level=1)
-            _docx_add_kv(doc, "Type", suffix.upper() if suffix else "Unknown")
-
+# ---------- SAFE READERS ----------
+def _safe_read_any(file):
+    """Read CSV/XLS/XLSX into DataFrame; JSON/TXT/HTML returns text; returns (kind, obj)."""
+    name = getattr(file, "name", "uploaded")
+    ext = name.split(".")[-1].lower() if "." in name else ""
+    file.seek(0)
+    if ext in {"csv"}:
+        return "df", pd.read_csv(file)
+    if ext in {"xlsx", "xls"}:
+        return "df", pd.read_excel(file)
+    if ext in {"json", "txt", "html", "htm"}:
+        raw = file.read()
+        if isinstance(raw, bytes):
             try:
-                f.seek(0)  # important for re-reads
-                if suffix in {"csv"}:
-                    df = pd.read_csv(f)
-                    _docx_add_kv(doc, "Rows", str(len(df)))
-                    _docx_add_kv(doc, "Columns", str(len(df.columns)))
-                    _docx_add_kv(doc, "Column Names", ", ".join(map(str, df.columns.tolist())))
-                    doc.add_paragraph()  # spacer
-                    _docx_add_dataframe_preview(doc, df)
+                raw = raw.decode("utf-8", errors="replace")
+            except Exception:
+                raw = str(raw)
+        return "text", raw
+    # try CSV fallback
+    try:
+        file.seek(0)
+        return "df", pd.read_csv(file)
+    except Exception:
+        file.seek(0)
+        return "text", file.read().decode("utf-8", errors="replace")
 
-                elif suffix in {"xlsx", "xls"}:
-                    df = pd.read_excel(f)
-                    _docx_add_kv(doc, "Rows", str(len(df)))
-                    _docx_add_kv(doc, "Columns", str(len(df.columns)))
-                    _docx_add_kv(doc, "Column Names", ", ".join(map(str, df.columns.tolist())))
-                    doc.add_paragraph()
-                    _docx_add_dataframe_preview(doc, df)
 
-                elif suffix in {"json", "txt", "html", "htm"}:
-                    # Text-like: include the first N characters so the file is represented
-                    f.seek(0)
-                    content = f.read()
-                    if isinstance(content, bytes):
-                        try:
-                            content = content.decode("utf-8", errors="replace")
-                        except Exception:
-                            content = str(content)
-                    preview = content[:4000]  # keep it manageable
-                    doc.add_paragraph(preview)
+def _k(v, default=None):
+    """Pretty number formatting for KPIs."""
+    if v is None:
+        return default if default is not None else "—"
+    try:
+        if isinstance(v, float):
+            if abs(v) >= 1000:
+                return f"{v:,.0f}"
+            return f"{v:,.2f}"
+        if isinstance(v, (int, np.integer)):
+            return f"{int(v):,}"
+        return str(v)
+    except Exception:
+        return str(v)
 
-                else:
-                    doc.add_paragraph(
-                        "This file type is not parsed for tabular preview. It is listed here for record."
-                    )
 
-            except Exception as e:
-                doc.add_paragraph(f"⚠️ Could not read/preview this file: {e}")
+# ---------- CHART RENDERERS (matplotlib, saved to PNG bytes) ----------
+def _save_current_fig(width_in=6, height_in=3.2, dpi=140):
+    buf = io.BytesIO()
+    fig = plt.gcf()
+    fig.set_size_inches(width_in, height_in)
+    plt.tight_layout()
+    fig.savefig(buf, format="png", dpi=dpi, bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    return buf.getvalue()
 
-            doc.add_page_break()
+
+def bar_chart(series_or_dict, title=None, xlabel=None, ylabel=None, rotate=0):
+    plt.figure()
+    if isinstance(series_or_dict, dict):
+        items = list(series_or_dict.items())
+        labels = [str(k) for k, _ in items]
+        vals = [v for _, v in items]
+    else:  # assume pandas Series
+        s = series_or_dict.sort_values(ascending=False)
+        labels, vals = list(s.index.astype(str)), list(s.values)
+    plt.bar(labels, vals)
+    if rotate:
+        plt.xticks(rotation=rotate, ha="right")
+    if title:
+        plt.title(title)
+    if xlabel:
+        plt.xlabel(xlabel)
+    if ylabel:
+        plt.ylabel(ylabel)
+    return _save_current_fig()
+
+
+def horizontal_bar_chart(series, title=None, xlabel=None, ylabel=None):
+    plt.figure()
+    s = series.sort_values(ascending=True)
+    plt.barh(list(s.index.astype(str)), list(s.values))
+    if title:
+        plt.title(title)
+    if xlabel:
+        plt.xlabel(xlabel)
+    if ylabel:
+        plt.ylabel(ylabel)
+    return _save_current_fig()
+
+
+def pie_chart(series_or_dict, title=None):
+    plt.figure()
+    if isinstance(series_or_dict, dict):
+        labels = list(series_or_dict.keys())
+        vals = list(series_or_dict.values())
+    else:
+        s = series_or_dict
+        labels, vals = list(s.index.astype(str)), list(s.values)
+    plt.pie(vals, labels=labels, autopct="%1.0f%%", startangle=90)
+    plt.axis("equal")
+    if title:
+        plt.title(title)
+    return _save_current_fig()
+
+
+# ---------- DOCX HELPERS ----------
+def _docx_title(doc: Document, title: str, subtitle: str | None = None):
+    h = doc.add_heading(title, level=0)
+    h.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    if subtitle:
+        p = doc.add_paragraph(subtitle)
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+
+def _docx_kpi_row(doc: Document, kpis: dict):
+    """Add a compact KPI table with label:value."""
+    table = doc.add_table(rows=1, cols=len(kpis))
+    table.style = "Light List"  # built-in docx style
+    row = table.rows[0].cells
+    for i, (k, v) in enumerate(kpis.items()):
+        row[i].text = f"{k}\n{_k(v)}"
+
+
+def _docx_add_image(doc: Document, image_bytes: bytes, caption: str | None = None, width_in=6):
+    if not image_bytes:
+        return
+    doc.add_picture(io.BytesIO(image_bytes), width=Inches(width_in))
+    if caption:
+        cap = doc.add_paragraph(caption)
+        cap.style = doc.styles["Caption"] if "Caption" in [s.name for s in doc.styles] else None
+        cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+
+def _docx_p(doc: Document, text: str, bold=False, italic=False):
+    p = doc.add_paragraph()
+    r = p.add_run(text)
+    r.bold = bold
+    r.italic = italic
+    return p
+
+
+# ---------- SECTION BUILDERS (each is optional + resilient if file missing) ----------
+def section_semrush_visibility(doc: Document, current_df: pd.DataFrame | None, prev_df: pd.DataFrame | None):
+    if current_df is None and prev_df is None:
+        return
+    doc.add_heading("Overall Keyword Visibility (YoY)", level=1)
+
+    def _share_top(df, cutoff):
+        if df is None or df.empty:
+            return None
+        pos_col = next((c for c in df.columns if c.lower() in {"position", "pos", "rank"}), None)
+        if not pos_col:
+            return None
+        total = len(df)
+        top = (df[pos_col] <= cutoff).sum()
+        return (top / total) * 100 if total > 0 else None
+
+    kpis = {
+        "Keywords (Current)": len(current_df) if current_df is not None else None,
+        "Top 3 % (Current)": _share_top(current_df, 3),
+        "Top 10 % (Current)": _share_top(current_df, 10),
+        "Keywords (Prev)": len(prev_df) if prev_df is not None else None,
+        "Top 3 % (Prev)": _share_top(prev_df, 3),
+        "Top 10 % (Prev)": _share_top(prev_df, 10),
+    }
+    _docx_kpi_row(doc, kpis)
+
+    # Small bar compare (if both exist)
+    if current_df is not None and prev_df is not None:
+        bars = {
+            "Current Keywords": len(current_df),
+            "Prev Keywords": len(prev_df),
+        }
+        try:
+            img = bar_chart(bars, title="Keyword Footprint", ylabel="Count")
+            _docx_add_image(doc, img, caption="Total Keywords (Current vs Previous)")
+        except Exception:
+            pass
+
+    _docx_p(doc, "Interpretation: Footprint and quality of rankings compared year-over-year (higher Top 3/Top 10 shares are better).", italic=True)
+
+
+def section_semrush_winners_losers(doc: Document, changes_df: pd.DataFrame | None, top_n=10):
+    if changes_df is None or changes_df.empty:
+        return
+    doc.add_heading("Top Gainers & Decliners (Semrush Position Changes)", level=1)
+    # Try to detect columns commonly present
+    kw_col = next((c for c in changes_df.columns if "keyword" in c.lower()), None)
+    from_col = next((c for c in changes_df.columns if "from" in c.lower() and "pos" in c.lower()), None)
+    to_col = next((c for c in changes_df.columns if "to" in c.lower() and "pos" in c.lower()), None)
+    traffic_col = next((c for c in changes_df.columns if "traffic" in c.lower()), None)
+
+    df = changes_df.copy()
+    if from_col and to_col:
+        df["delta_pos"] = df[from_col] - df[to_col]  # positive = improved
+    else:
+        df["delta_pos"] = np.nan
+
+    winners = df.sort_values("delta_pos", ascending=False).head(top_n)
+    losers = df.sort_values("delta_pos", ascending=True).head(top_n)
+
+    # Winners chart (position improvement magnitude only, if available)
+    if not winners.empty and "delta_pos" in winners:
+        ser = pd.Series(winners["delta_pos"].values, index=winners[kw_col] if kw_col else winners.index)
+        img = horizontal_bar_chart(ser, title="Top Winners (by position gain)", xlabel="Positions Improved")
+        _docx_add_image(doc, img)
+
+    # Losers chart
+    if not losers.empty and "delta_pos" in losers:
+        ser = pd.Series(-losers["delta_pos"].values, index=losers[kw_col] if kw_col else losers.index)
+        img = horizontal_bar_chart(ser, title="Top Losers (by position drop)", xlabel="Positions Lost")
+        _docx_add_image(doc, img)
+
+    _docx_p(doc, "Interpretation: Transactional gains vs. informational losses often indicate SERP intent shifts or content gaps.", italic=True)
+
+
+def section_semrush_pages(doc: Document, pages_df: pd.DataFrame | None, top_n=10):
+    if pages_df is None or pages_df.empty:
+        return
+    doc.add_heading("Top Pages by Estimated Visits (Semrush Pages)", level=1)
+    url_col = next((c for c in pages_df.columns if "url" in c.lower() or "page" in c.lower()), None)
+    visits_col = next((c for c in pages_df.columns if "visit" in c.lower() or "traffic" in c.lower()), None)
+
+    if not url_col or not visits_col:
+        _docx_p(doc, "Skipped: required columns not found (URL/Visits).", italic=True)
+        return
+
+    top = pages_df.sort_values(visits_col, ascending=False).head(top_n)
+    ser = pd.Series(top[visits_col].values, index=top[url_col])
+    img = horizontal_bar_chart(ser, title="Top Pages (Visits)", xlabel="Estimated Visits")
+    _docx_add_image(doc, img)
+
+    _docx_p(doc, "Why it matters: Commercial-intent pages typically drive the bulk of opportunity; protect and grow them.", italic=True)
+
+
+def section_semrush_competitors(doc: Document, competitors_df: pd.DataFrame | None):
+    if competitors_df is None or competitors_df.empty:
+        return
+    doc.add_heading("Competitor Benchmark (Semrush)", level=1)
+    # Try to find overlap/traffic cols
+    name_col = next((c for c in competitors_df.columns if "domain" in c.lower() or "competitor" in c.lower()), None)
+    overlap_col = next((c for c in competitors_df.columns if "common" in c.lower() and "keyword" in c.lower()), None)
+    traffic_col = next((c for c in competitors_df.columns if "traffic" in c.lower()), None)
+
+    tbl = competitors_df.copy()
+    keep = [c for c in [name_col, overlap_col, traffic_col] if c]
+    if keep:
+        tbl = tbl[keep].head(8)
+        # bar chart by traffic if available
+        if traffic_col and name_col:
+            ser = pd.Series(tbl[traffic_col].values, index=tbl[name_col])
+            img = horizontal_bar_chart(ser, title="Competitor Estimated Traffic", xlabel="Visits")
+            _docx_add_image(doc, img)
+    _docx_p(doc, "Interpretation: Higher traffic with similar overlap signals content depth/authority gaps.", italic=True)
+
+
+def section_gsc_queries(doc: Document, queries_df: pd.DataFrame | None):
+    if queries_df is None or queries_df.empty:
+        return
+    doc.add_heading("GSC Query Trends (YoY/Period Compare)", level=1)
+    # Try detect columns
+    click_col = next((c for c in queries_df.columns if "click" in c.lower()), None)
+    imp_col = next((c for c in queries_df.columns if "impression" in c.lower()), None)
+    query_col = next((c for c in queries_df.columns if "query" in c.lower()), None)
+
+    kpis = {}
+    if click_col:
+        kpis["Clicks"] = queries_df[click_col].sum()
+    if imp_col:
+        kpis["Impressions"] = queries_df[imp_col].sum()
+    if kpis:
+        _docx_kpi_row(doc, kpis)
+
+    # Top queries by clicks (if available)
+    if click_col and query_col:
+        top = queries_df.sort_values(click_col, ascending=False).head(10)
+        ser = pd.Series(top[click_col].values, index=top[query_col])
+        img = horizontal_bar_chart(ser, title="Top Queries by Clicks", xlabel="Clicks")
+        _docx_add_image(doc, img)
+
+    _docx_p(doc, "Interpretation: Impressions up with clicks down → CTR erosion from richer SERPs or ranking shifts.", italic=True)
+
+
+def section_gsc_pages(doc: Document, pages_df: pd.DataFrame | None):
+    if pages_df is None or pages_df.empty:
+        return
+    doc.add_heading("GSC Pages (Winners & Slipping)", level=1)
+    # Attempt to find url + clicks
+    url_col = next((c for c in pages_df.columns if "page" in c.lower() or "url" in c.lower()), None)
+    click_col = next((c for c in pages_df.columns if "click" in c.lower()), None)
+    if url_col and click_col:
+        top = pages_df.sort_values(click_col, ascending=False).head(10)
+        ser = pd.Series(top[click_col].values, index=top[url_col])
+        img = horizontal_bar_chart(ser, title="Top Pages by Clicks", xlabel="Clicks")
+        _docx_add_image(doc, img)
+        _docx_p(doc, "Why it matters: Optimize top entry pages for conversion paths to maximize ROI.", italic=True)
+
+
+def section_ga4_traffic_mix(doc: Document, acq_df: pd.DataFrame | None):
+    if acq_df is None or acq_df.empty:
+        return
+    doc.add_heading("GA4 Traffic Acquisition (Channel Mix)", level=1)
+    # Find channel + sessions-like column
+    chan_col = next((c for c in acq_df.columns if "channel" in c.lower() or "source" in c.lower()), None)
+    sess_col = next((c for c in acq_df.columns if "session" in c.lower()), None)
+    if not chan_col or not sess_col:
+        _docx_p(doc, "Skipped: required columns not found (channel/sessions).", italic=True)
+        return
+    ser = acq_df.groupby(chan_col)[sess_col].sum().sort_values(ascending=False)
+    img = pie_chart(ser, title="Traffic Mix by Channel")
+    _docx_add_image(doc, img)
+    _docx_p(doc, "Interpretation: Organic’s share indicates SEO’s leverage on total acquisition.", italic=True)
+
+
+def section_ga4_landing_pages(doc: Document, lp_df: pd.DataFrame | None):
+    if lp_df is None or lp_df.empty:
+        return
+    doc.add_heading("GA4 Top Landing Pages (Organic)", level=1)
+    url_col = next((c for c in lp_df.columns if "page" in c.lower() or "landing" in c.lower() or "url" in c.lower()), None)
+    sess_col = next((c for c in lp_df.columns if "session" in c.lower()), None)
+    if url_col and sess_col:
+        top = lp_df.sort_values(sess_col, ascending=False).head(10)
+        ser = pd.Series(top[sess_col].values, index=top[url_col])
+        img = horizontal_bar_chart(ser, title="Top Landing Pages by Sessions", xlabel="Sessions")
+        _docx_add_image(doc, img)
+        _docx_p(doc, "Note: Large (not set) buckets often indicate tracking gaps to fix.", italic=True)
+
+
+# ---------- MASTER REPORT BUILDER ----------
+def build_seo_audit_docx(
+    site_domain: str,
+    semrush_current_df: pd.DataFrame | None = None,
+    semrush_prev_df: pd.DataFrame | None = None,
+    semrush_changes_df: pd.DataFrame | None = None,
+    semrush_pages_df: pd.DataFrame | None = None,
+    semrush_comp_df: pd.DataFrame | None = None,
+    gsc_queries_df: pd.DataFrame | None = None,
+    gsc_pages_df: pd.DataFrame | None = None,
+    ga4_acq_df: pd.DataFrame | None = None,
+    ga4_lp_df: pd.DataFrame | None = None,
+) -> bytes:
+    doc = Document()
+    _docx_title(doc, f"SEO Performance Analysis for {site_domain}",
+                subtitle=pd.Timestamp.now().strftime("%Y-%m-%d"))
+
+    # Executive summary (lightweight templated; you can enhance if you have your own summary functions)
+    doc.add_heading("Executive Summary", level=1)
+    _docx_p(doc,
+        f"{site_domain} shows a mixed SEO picture based on available sources. "
+        "Footprint/visibility, winners/losers, page drivers, competitor benchmarks, and GSC/GA4 signals are compiled below. "
+        "Sections without files were skipped.", italic=False)
+
+    # Sections are optional; each will quietly skip if its df is None/empty
+    section_semrush_visibility(doc, semrush_current_df, semrush_prev_df)
+    section_semrush_winners_losers(doc, semrush_changes_df)
+    section_semrush_pages(doc, semrush_pages_df)
+    section_semrush_competitors(doc, semrush_comp_df)
+    section_gsc_queries(doc, gsc_queries_df)
+    section_gsc_pages(doc, gsc_pages_df)
+    section_ga4_traffic_mix(doc, ga4_acq_df)
+    section_ga4_landing_pages(doc, ga4_lp_df)
 
     # finalize
     buf = io.BytesIO()
@@ -4872,46 +5129,6 @@ STRATEGIC INSIGHTS
 """
     
     return report
-    
-def comprehensive_report_tab():
-    st.header("📝 Comprehensive Report (.docx)")
-
-    st.write(
-        "Upload the same files you used in the other tabs. "
-        "This tab won’t render any charts—"
-        "it will compile a single Word document you can download."
-    )
-
-    uploads = st.file_uploader(
-        "Upload files (CSV, XLSX, XLS, JSON, TXT, HTML):",
-        type=["csv", "xlsx", "xls", "json", "txt", "html", "htm"],
-        accept_multiple_files=True,
-        key="report_uploads",
-    )
-
-    generate = st.button("Generate Word Report", type="primary", use_container_width=True)
-
-    if generate:
-        if not uploads:
-            st.warning("Please upload at least one file.")
-            return
-
-        with st.spinner("Compiling Word document..."):
-            docx_bytes = build_docx_report_from_uploads(uploads)
-
-        st.success("Report ready!")
-        st.download_button(
-            label="📄 Download Comprehensive SEO Report",
-            data=docx_bytes,
-            file_name="SEO_Audit_Report.docx",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            use_container_width=True,
-        )
-
-    st.caption(
-        "Tip: If you already uploaded files in other tabs and stored them in session state, "
-        "you can re-upload them here—or extend this tab to pull from session directly."
-    )
 
 if __name__ == "__main__":
     main()
