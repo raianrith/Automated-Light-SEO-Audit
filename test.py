@@ -4034,94 +4034,34 @@ STRATEGIC INSIGHTS
     
     return report
 
-def traffic_attribution_analysis():
-    """Analyze sitewide traffic attribution from GSC"""
-    st.markdown('<div class="section-header">📈 Traffic Attribution Analysis</div>', unsafe_allow_html=True)
-    
-    st.markdown("""
-    <div class="instruction-box">
-        <h4>📋 What This Section Analyzes:</h4>
-        <p>This analysis examines your overall organic performance to understand:</p>
-        <ul>
-            <li><b>Sitewide clicks & impressions</b> - Total organic performance YoY</li>
-            <li><b>CTR trends</b> - Whether click-through rates are improving</li>
-            <li><b>Position changes</b> - Average ranking movement impact</li>
-            <li><b>Demand vs execution</b> - Separate impression growth from CTR issues</li>
-        </ul>
-        
-        <h4>📁 Required Files:</h4>
-        <p>You need <b>1-2 files</b>:</p>
-        <ul>
-            <li><b>GSC Search Results Compare</b> - Sitewide performance comparison</li>
-            <li><b>GA4 Traffic Acquisition</b> - Optional: validate organic session impact</li>
-        </ul>
-        
-        <h4>🎯 Key Insights You'll Get:</h4>
-        <ul>
-            <li>Total clicks and impressions YoY changes</li>
-            <li>Weighted CTR and position analysis</li>
-            <li>Traffic pattern interpretation</li>
-            <li>Business impact validation</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.info("🚧 This section will analyze sitewide GSC performance with weighted metrics!")
-
-def create_visibility_summary_report(results):
-    """Create a downloadable summary report"""
-    
-    report = f"""
-KEYWORD VISIBILITY ANALYSIS REPORT
-Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-
-===========================================
-EXECUTIVE SUMMARY
-===========================================
-
-Total Keywords Comparison:
-• Previous Period: {results['total_previous']:,} keywords
-• Current Period: {results['total_current']:,} keywords
-• Change: {results['total_change']:,} keywords ({results['total_change_pct']:.1f}%)
-
-Ranking Quality Distribution (Current Period):
-• Top 3 Positions: {results['bucket_changes']['top_3']['current']} ({results['bucket_changes']['top_3']['current_share']:.1f}%)
-• Positions 4-10: {results['bucket_changes']['top_4_10']['current']} ({results['bucket_changes']['top_4_10']['current_share']:.1f}%)
-• Positions 11-20: {results['bucket_changes']['top_11_20']['current']} ({results['bucket_changes']['top_11_20']['current_share']:.1f}%)
-• Positions 21+: {results['bucket_changes']['top_21_plus']['current']} ({results['bucket_changes']['top_21_plus']['current_share']:.1f}%)
-
-===========================================
-DETAILED CHANGES BY RANKING BUCKET
-===========================================
-
-Top 3 Rankings:
-• Previous: {results['bucket_changes']['top_3']['previous']} | Current: {results['bucket_changes']['top_3']['current']}
-• Change: {results['bucket_changes']['top_3']['change']} ({results['bucket_changes']['top_3']['change_pct']:.1f}%)
-
-Positions 4-10:
-• Previous: {results['bucket_changes']['top_4_10']['previous']} | Current: {results['bucket_changes']['top_4_10']['current']}
-• Change: {results['bucket_changes']['top_4_10']['change']} ({results['bucket_changes']['top_4_10']['change_pct']:.1f}%)
-
-Positions 11-20:
-• Previous: {results['bucket_changes']['top_11_20']['previous']} | Current: {results['bucket_changes']['top_11_20']['current']}
-• Change: {results['bucket_changes']['top_11_20']['change']} ({results['bucket_changes']['top_11_20']['change_pct']:.1f}%)
-
-Positions 21+:
-• Previous: {results['bucket_changes']['top_21_plus']['previous']} | Current: {results['bucket_changes']['top_21_plus']['current']}
-• Change: {results['bucket_changes']['top_21_plus']['change']} ({results['bucket_changes']['top_21_plus']['change_pct']:.1f}%)
-
-===========================================
-RECOMMENDATIONS
-===========================================
-
-{generate_visibility_insights(results).replace('<b>', '').replace('</b>', '').replace('<br><br>', '\n\n').replace('🟢', '• ').replace('🟡', '• ').replace('🔴', '• ').replace('🟨', '• ').replace('🎯', '• ').replace('⚠️', '• ')}
-
-===========================================
-"""
-    return report
+def read_uploaded_file_safe(uploaded_file):
+    """Read uploaded CSV or Excel file with better error handling"""
+    if uploaded_file is not None:
+        file_name = uploaded_file.name.lower()
+        try:
+            if file_name.endswith('.xlsx') or file_name.endswith('.xls'):
+                # Try reading Excel file
+                df = pd.read_excel(uploaded_file)
+                return df
+            else:
+                # Try different CSV reading approaches
+                try:
+                    # First try standard CSV
+                    df = pd.read_csv(uploaded_file)
+                    return df
+                except:
+                    # Reset file pointer and try with different separator
+                    uploaded_file.seek(0)
+                    df = pd.read_csv(uploaded_file, sep=';')
+                    return df
+        except Exception as e:
+            st.error(f"Could not read file {uploaded_file.name}: {str(e)}")
+            st.info("Try saving your file as CSV with comma separators, or as Excel format")
+            return None
+    return None
 
 def traffic_attribution_analysis():
-    """Analyze sitewide traffic attribution from GSC and GA4"""
+    """Analyze comprehensive traffic attribution from GSC and GA4"""
     st.markdown('<div class="section-header">📈 Traffic Attribution Analysis</div>', unsafe_allow_html=True)
     
     # Modern instruction design
@@ -4131,186 +4071,320 @@ def traffic_attribution_analysis():
         col1, col2 = st.columns([2, 1])
         with col1:
             st.markdown("""
-            This analysis examines your overall organic performance to understand:
+            This comprehensive analysis examines your organic performance using multiple data sources:
             
             **🎯 Key Questions Answered:**
             - How have sitewide clicks and impressions changed year-over-year?
-            - Is declining traffic due to position drops or CTR pressure?
-            - What's the weighted CTR trend across all keywords?
-            - Do GA4 sessions confirm GSC click changes?
+            - Which specific queries and landing pages drive the most impact?
+            - Do GA4 sessions confirm GSC click trends?
+            - What conversion opportunities exist in your organic traffic?
             """)
         
         with col2:
             st.info("""
             **💡 Strategic Value**
             
-            Separates demand growth from execution issues to identify the root cause of traffic changes.
+            Combines GSC performance data with GA4 traffic and conversion insights for complete attribution analysis.
             """)
     
     # File requirements in expandable section
     with st.expander("📁 **File Requirements & Setup**", expanded=False):
         st.markdown("""
-        **Required Files:** 1-2 files for comprehensive analysis
+        **Required Files:** 3 files for comprehensive analysis
         
-        | File | Purpose | Export From |
-        |------|---------|-------------|
-        | **GSC Search Results Compare** | Primary sitewide analysis | Search Console → Search Results (Compare view) |
-        | **GA4 Traffic Acquisition** | Optional validation | Reports → Acquisition → Traffic Acquisition |
+        | File | Purpose | Your File |
+        |------|---------|-----------|
+        | **GSC Queries Compare** | Query performance YoY | `falconstructures_gsc_queries_compareyoy_20250819.xlsx` |
+        | **GA4 Traffic Acquisition** | Session validation | `falconstructures_ga4_trafficacquisition_organic_20250501_to_20250731.csv` |
+        | **GA4 Landing Page** | Page performance | `falconstructures_ga4_landingpage_organic_20250501_to_20250731.csv` |
         
-        **📋 GSC Export Steps:**
-        1. Go to Search Results in Google Search Console
-        2. Set: Search type = Web
-        3. Set: Date → Compare → Last 3 months vs Same period last year
-        4. Export → CSV or Excel (main Search Results tab)
-        
-        **📋 GA4 Export Steps (Optional):**
-        1. Reports → Acquisition → Traffic acquisition
-        2. Same date range as GSC
-        3. Filter: Session default channel group = "Organic Search"
-        4. Share report → Download CSV
+        **📊 Analysis Combines:**
+        - GSC query-level performance changes
+        - GA4 traffic acquisition metrics
+        - Landing page engagement and conversion data
         """)
     
     # Key insights preview
-    st.markdown("### 🎯 Analysis Insights You'll Get")
+    st.markdown("### 🎯 Comprehensive Insights You'll Get")
     
     insight_col1, insight_col2, insight_col3, insight_col4 = st.columns(4)
     
     with insight_col1:
         st.markdown("""
-        **📊 Sitewide Performance**
-        - Total clicks/impressions YoY
-        - Performance trend diagnosis
+        **📊 Query Performance**
+        - YoY clicks/impressions changes
+        - CTR pressure identification
         """)
     
     with insight_col2:
         st.markdown("""
-        **🎯 CTR Analysis**
-        - Weighted click-through rate
-        - CTR pressure identification
+        **🎯 Session Validation**
+        - GA4 session confirmation
+        - Engagement metrics
         """)
     
     with insight_col3:
         st.markdown("""
-        **📍 Position Context**
-        - Average position changes
-        - Ranking impact assessment
+        **📄 Landing Page Impact**
+        - Top performing pages
+        - Conversion optimization opportunities
         """)
     
     with insight_col4:
         st.markdown("""
-        **✅ GA4 Validation**
-        - Session impact confirmation
-        - Business impact sizing
+        **💡 Integrated Insights**
+        - Cross-platform analysis
+        - Actionable recommendations
         """)
     
     st.markdown("---")
     
     # File upload section
-    st.markdown("### 📤 Upload Your Data Files")
+    st.markdown("### 📤 Upload Your Three Data Files")
     
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.markdown("#### 📊 GSC Search Results Compare (Required)")
-        gsc_search_file = st.file_uploader(
-            "Upload GSC Search Results Compare file",
+        st.markdown("#### 📊 GSC Queries Compare")
+        gsc_queries_file = st.file_uploader(
+            "Upload GSC Queries Compare file",
             type=['csv', 'xlsx', 'xls'],
-            key="gsc_search_compare",
-            help="Export from GSC: Search Results → Compare view (sitewide data)"
+            key="gsc_queries_compare",
+            help="Your GSC queries YoY comparison file"
         )
         
     with col2:
-        st.markdown("#### 📊 GA4 Traffic Acquisition (Optional)")
+        st.markdown("#### 📈 GA4 Traffic Acquisition")
         ga4_traffic_file = st.file_uploader(
             "Upload GA4 Traffic Acquisition file",
             type=['csv', 'xlsx', 'xls'],
-            key="ga4_traffic_file",
-            help="Optional: Validates organic search session impact"
+            key="ga4_traffic_acq",
+            help="GA4 organic traffic acquisition data"
         )
     
-    # Process files if main file uploaded
-    if gsc_search_file is not None:
+    with col3:
+        st.markdown("#### 📄 GA4 Landing Page")
+        ga4_landing_file = st.file_uploader(
+            "Upload GA4 Landing Page file",
+            type=['csv', 'xlsx', 'xls'],
+            key="ga4_landing_pages",
+            help="GA4 organic landing page performance"
+        )
+    
+    # Process files if all are uploaded
+    if gsc_queries_file is not None and ga4_traffic_file is not None and ga4_landing_file is not None:
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
-            run_attribution_analysis = st.button("🚀 Run Attribution Analysis", key="run_attribution", type="primary", use_container_width=True)
+            run_comprehensive_analysis = st.button("🚀 Run Comprehensive Analysis", key="run_comprehensive", type="primary", use_container_width=True)
         
-        if run_attribution_analysis:
-            with st.spinner("🔄 Analyzing traffic attribution..."):
+        if run_comprehensive_analysis:
+            with st.spinner("🔄 Analyzing comprehensive traffic attribution..."):
                 try:
-                    # Load and validate data
-                    gsc_df = normalize_columns(read_uploaded_file(gsc_search_file))
+                    # Load all three files
+                    gsc_df = read_uploaded_file_safe(gsc_queries_file)
+                    gsc_df = normalize_columns(gsc_df)
                     
-                    # Optional GA4 data
-                    ga4_df = None
-                    if ga4_traffic_file is not None:
-                        ga4_df = normalize_columns(read_uploaded_file(ga4_traffic_file))
+                    ga4_traffic_df = read_uploaded_file_safe(ga4_traffic_file)
+                    ga4_traffic_df = normalize_columns(ga4_traffic_df)
                     
-                    # Validate required columns
-                    validation_passed, validation_message = validate_attribution_data(gsc_df)
+                    ga4_landing_df = read_uploaded_file_safe(ga4_landing_file)
+                    ga4_landing_df = normalize_columns(ga4_landing_df)
                     
-                    if not validation_passed:
-                        st.error(validation_message)
+                    # Validate all data
+                    gsc_valid, gsc_msg = validate_gsc_queries_data(gsc_df)
+                    ga4_traffic_valid, ga4_traffic_msg = validate_ga4_traffic_data(ga4_traffic_df)
+                    ga4_landing_valid, ga4_landing_msg = validate_ga4_landing_data(ga4_landing_df)
+                    
+                    if not gsc_valid:
+                        st.error(f"GSC Data: {gsc_msg}")
+                        st.stop()
+                    if not ga4_traffic_valid:
+                        st.error(f"GA4 Traffic Data: {ga4_traffic_msg}")
+                        st.stop()
+                    if not ga4_landing_valid:
+                        st.error(f"GA4 Landing Data: {ga4_landing_msg}")
                         st.stop()
                     
-                    # Perform analysis
-                    attribution_results = analyze_traffic_attribution(gsc_df, ga4_df)
+                    # Perform comprehensive analysis
+                    comprehensive_results = analyze_comprehensive_attribution(gsc_df, ga4_traffic_df, ga4_landing_df)
                     
                     # Display results
-                    display_attribution_results(attribution_results)
+                    display_comprehensive_results(comprehensive_results)
                     
                 except Exception as e:
                     st.error(f"❌ Error processing files: {str(e)}")
-                    st.info("💡 Please ensure you've uploaded valid GSC Search Results Compare file")
+                    st.info("💡 Please ensure all three files are uploaded and properly formatted")
     else:
-        st.info("📤 Please upload a GSC Search Results Compare file to begin analysis")
+        missing_files = []
+        if gsc_queries_file is None:
+            missing_files.append("GSC Queries Compare")
+        if ga4_traffic_file is None:
+            missing_files.append("GA4 Traffic Acquisition")
+        if ga4_landing_file is None:
+            missing_files.append("GA4 Landing Page")
+        
+        st.info(f"📤 Please upload: {', '.join(missing_files)}")
 
-
-def validate_attribution_data(df):
-    """Validate GSC Search Results Compare data"""
+def validate_gsc_queries_data(df):
+    """Validate GSC Queries data structure"""
+    if df is None or len(df) == 0:
+        return False, "File appears to be empty"
     
-    # Look for typical GSC sitewide columns
+    st.info(f"📋 GSC Queries columns: {list(df.columns)[:10]}")
+    
+    # Look for query comparison columns
+    query_col = find_column(df.columns, ['top queries', 'query'])
     clicks_current = find_column(df.columns, ['last 3 months clicks', 'clicks'])
     clicks_previous = find_column(df.columns, ['previous 3 months clicks', 'same period last year clicks'])
-    impressions_current = find_column(df.columns, ['last 3 months impressions', 'impressions'])
-    impressions_previous = find_column(df.columns, ['previous 3 months impressions', 'same period last year impressions'])
     
-    missing_columns = []
-    if not clicks_current:
-        missing_columns.append('Current Period Clicks')
-    if not clicks_previous:
-        missing_columns.append('Previous Period Clicks')
-    if not impressions_current:
-        missing_columns.append('Current Period Impressions')
-    if not impressions_previous:
-        missing_columns.append('Previous Period Impressions')
+    if not query_col or not clicks_current or not clicks_previous:
+        return False, "Missing required GSC query comparison columns"
     
-    if missing_columns:
-        return False, f"❌ Missing required columns: {missing_columns}. Available columns: {list(df.columns)[:10]}"
-    
-    if len(df) == 0:
-        return False, "❌ File appears to be empty"
-    
-    return True, "✅ Data validation passed"
+    return True, "GSC data validated"
 
-
-def analyze_traffic_attribution(gsc_df, ga4_df=None):
-    """Analyze traffic attribution following the prototype methodology"""
+def validate_ga4_traffic_data(df):
+    """Validate GA4 Traffic Acquisition data - Updated for flexible column matching"""
+    if df is None or len(df) == 0:
+        return False, "File appears to be empty"
     
-    # Find GSC columns
+    st.info(f"📋 GA4 Traffic columns detected: {list(df.columns)}")
+    
+    # Look for sessions column with more flexible matching
+    sessions_col = find_column(df.columns, ['sessions', 'session', 'users', 'active users'])
+    
+    if not sessions_col:
+        # List available columns to help debug
+        available_cols = ", ".join(list(df.columns)[:15])  # Show first 15 columns
+        return False, f"Missing Sessions/Users column. Available columns: {available_cols}"
+    
+    return True, "GA4 traffic data validated"
+
+def analyze_ga4_traffic_detailed(ga4_df):
+    """Detailed GA4 traffic analysis - Updated for flexible column matching"""
+    
+    # Find columns with more flexible matching
+    sessions_col = find_column(ga4_df.columns, ['sessions', 'session'])
+    users_col = find_column(ga4_df.columns, ['users', 'active users', 'total users'])
+    engaged_sessions_col = find_column(ga4_df.columns, ['engaged sessions'])
+    events_col = find_column(ga4_df.columns, ['key events', 'conversions', 'events', 'total events'])
+    bounce_rate_col = find_column(ga4_df.columns, ['bounce rate'])
+    avg_duration_col = find_column(ga4_df.columns, ['average engagement time', 'avg engagement time', 'engagement time'])
+    engagement_rate_col = find_column(ga4_df.columns, ['engagement rate', 'engaged sessions per user'])
+    
+    # If we have multiple rows, try to find the organic search row
+    organic_row = None
+    
+    # Check if there's a channel grouping column
+    channel_col = find_column(ga4_df.columns, ['default channel group', 'session default channel group', 'channel', 'source', 'medium'])
+    
+    if channel_col:
+        # Look for organic search row
+        organic_mask = ga4_df[channel_col].str.contains('Organic', case=False, na=False)
+        if organic_mask.any():
+            organic_row = ga4_df[organic_mask].iloc[0]
+        else:
+            # If no organic found, use first row (assuming it's already filtered)
+            organic_row = ga4_df.iloc[0] if len(ga4_df) > 0 else None
+    else:
+        # No channel column, assume data is already filtered to organic
+        organic_row = ga4_df.iloc[0] if len(ga4_df) > 0 else None
+    
+    if organic_row is None:
+        return None
+    
+    analysis = {}
+    
+    # Extract available metrics
+    if sessions_col:
+        analysis['sessions'] = pd.to_numeric(organic_row[sessions_col], errors='coerce')
+    elif users_col:
+        # If no sessions column, use users as a proxy
+        analysis['sessions'] = pd.to_numeric(organic_row[users_col], errors='coerce')
+        
+    if users_col:
+        analysis['users'] = pd.to_numeric(organic_row[users_col], errors='coerce')
+    if engaged_sessions_col:
+        analysis['engaged_sessions'] = pd.to_numeric(organic_row[engaged_sessions_col], errors='coerce')
+    if events_col:
+        analysis['key_events'] = pd.to_numeric(organic_row[events_col], errors='coerce')
+    if bounce_rate_col:
+        analysis['bounce_rate'] = pd.to_numeric(organic_row[bounce_rate_col], errors='coerce')
+    if avg_duration_col:
+        analysis['avg_engagement_time'] = pd.to_numeric(organic_row[avg_duration_col], errors='coerce')
+    if engagement_rate_col:
+        analysis['engagement_rate'] = pd.to_numeric(organic_row[engagement_rate_col], errors='coerce')
+    
+    # Calculate engagement rate if we have the components
+    if 'engagement_rate' not in analysis and 'sessions' in analysis and 'engaged_sessions' in analysis and analysis['sessions'] > 0:
+        analysis['engagement_rate'] = (analysis['engaged_sessions'] / analysis['sessions'] * 100)
+    
+    # Calculate conversion rate if we have the components
+    if 'sessions' in analysis and 'key_events' in analysis and analysis['sessions'] > 0:
+        analysis['conversion_rate'] = (analysis['key_events'] / analysis['sessions'] * 100)
+    
+    return analysis
+
+def validate_ga4_landing_data(df):
+    """Validate GA4 Landing Page data"""
+    if df is None or len(df) == 0:
+        return False, "File appears to be empty"
+    
+    st.info(f"📋 GA4 Landing columns: {list(df.columns)[:10]}")
+    
+    # Look for landing page and sessions columns
+    landing_col = find_column(df.columns, ['landing page', 'page'])
+    sessions_col = find_column(df.columns, ['sessions'])
+    
+    if not landing_col or not sessions_col:
+        return False, "Missing Landing Page or Sessions columns"
+    
+    return True, "GA4 landing data validated"
+
+def analyze_comprehensive_attribution(gsc_df, ga4_traffic_df, ga4_landing_df):
+    """Comprehensive analysis combining all three data sources"""
+    
+    # 1. GSC Query Analysis
+    gsc_analysis = analyze_gsc_queries(gsc_df)
+    
+    # 2. GA4 Traffic Analysis 
+    ga4_traffic_analysis = analyze_ga4_traffic_detailed(ga4_traffic_df)
+    
+    # 3. GA4 Landing Page Analysis
+    ga4_landing_analysis = analyze_ga4_landing_pages(ga4_landing_df)
+    
+    # 4. Cross-platform insights
+    integrated_insights = generate_integrated_insights(gsc_analysis, ga4_traffic_analysis, ga4_landing_analysis)
+    
+    return {
+        'gsc_analysis': gsc_analysis,
+        'ga4_traffic': ga4_traffic_analysis,
+        'ga4_landing': ga4_landing_analysis,
+        'integrated_insights': integrated_insights,
+        'performance_pattern': analyze_performance_pattern(
+            gsc_analysis['clicks_delta'], 
+            gsc_analysis['impr_delta'], 
+            gsc_analysis['ctr_delta_pp'], 
+            None
+        )
+    }
+
+def analyze_gsc_queries(gsc_df):
+    """Analyze GSC queries data"""
+    
+    # Find columns
+    query_col = find_column(gsc_df.columns, ['top queries', 'query'])
     clicks_now = find_column(gsc_df.columns, ['last 3 months clicks', 'clicks'])
     clicks_prev = find_column(gsc_df.columns, ['previous 3 months clicks', 'same period last year clicks'])
     impr_now = find_column(gsc_df.columns, ['last 3 months impressions', 'impressions'])
     impr_prev = find_column(gsc_df.columns, ['previous 3 months impressions', 'same period last year impressions'])
-    ctr_now = find_column(gsc_df.columns, ['last 3 months ctr', 'ctr'])
-    ctr_prev = find_column(gsc_df.columns, ['previous 3 months ctr', 'same period last year ctr'])
     pos_now = find_column(gsc_df.columns, ['last 3 months position', 'position'])
     pos_prev = find_column(gsc_df.columns, ['previous 3 months position', 'same period last year position'])
     
-    # Calculate sitewide totals
+    # Calculate totals
     total_clicks_now = pd.to_numeric(gsc_df[clicks_now], errors='coerce').sum()
     total_clicks_prev = pd.to_numeric(gsc_df[clicks_prev], errors='coerce').sum()
-    total_impr_now = pd.to_numeric(gsc_df[impr_now], errors='coerce').sum()
-    total_impr_prev = pd.to_numeric(gsc_df[impr_prev], errors='coerce').sum()
+    total_impr_now = pd.to_numeric(gsc_df[impr_now], errors='coerce').sum() if impr_now else 0
+    total_impr_prev = pd.to_numeric(gsc_df[impr_prev], errors='coerce').sum() if impr_prev else 0
     
     # Calculate changes
     clicks_delta = total_clicks_now - total_clicks_prev
@@ -4318,42 +4392,15 @@ def analyze_traffic_attribution(gsc_df, ga4_df=None):
     impr_delta = total_impr_now - total_impr_prev
     impr_pct_change = (impr_delta / total_impr_prev * 100) if total_impr_prev > 0 else 0
     
-    # Calculate weighted CTR
+    # Calculate CTR
     weighted_ctr_now = (total_clicks_now / total_impr_now * 100) if total_impr_now > 0 else 0
     weighted_ctr_prev = (total_clicks_prev / total_impr_prev * 100) if total_impr_prev > 0 else 0
     ctr_delta_pp = weighted_ctr_now - weighted_ctr_prev
     
-    # Calculate weighted position if available
-    weighted_pos_now = weighted_pos_prev = pos_delta = None
-    if pos_now and pos_prev:
-        # Weight by impressions for more accurate position
-        pos_now_series = pd.to_numeric(gsc_df[pos_now], errors='coerce')
-        pos_prev_series = pd.to_numeric(gsc_df[pos_prev], errors='coerce')
-        impr_now_series = pd.to_numeric(gsc_df[impr_now], errors='coerce')
-        impr_prev_series = pd.to_numeric(gsc_df[impr_prev], errors='coerce')
-        
-        # Remove rows with missing data
-        valid_now = ~(pos_now_series.isna() | impr_now_series.isna()) & (impr_now_series > 0)
-        valid_prev = ~(pos_prev_series.isna() | impr_prev_series.isna()) & (impr_prev_series > 0)
-        
-        if valid_now.any():
-            weighted_pos_now = (pos_now_series[valid_now] * impr_now_series[valid_now]).sum() / impr_now_series[valid_now].sum()
-        if valid_prev.any():
-            weighted_pos_prev = (pos_prev_series[valid_prev] * impr_prev_series[valid_prev]).sum() / impr_prev_series[valid_prev].sum()
-        
-        if weighted_pos_now and weighted_pos_prev:
-            pos_delta = weighted_pos_now - weighted_pos_prev
-    
-    # Analyze GA4 data if provided
-    ga4_analysis = None
-    if ga4_df is not None:
-        try:
-            ga4_analysis = analyze_ga4_traffic(ga4_df)
-        except Exception as e:
-            st.warning(f"Could not process GA4 data: {str(e)}")
-    
-    # Performance pattern analysis
-    pattern = analyze_performance_pattern(clicks_delta, impr_delta, ctr_delta_pp, pos_delta)
+    # Top queries analysis
+    gsc_df['Clicks_Delta'] = pd.to_numeric(gsc_df[clicks_now], errors='coerce') - pd.to_numeric(gsc_df[clicks_prev], errors='coerce')
+    top_gaining_queries = gsc_df.sort_values('Clicks_Delta', ascending=False).head(10)
+    top_losing_queries = gsc_df.sort_values('Clicks_Delta', ascending=True).head(10)
     
     return {
         'total_clicks_now': total_clicks_now,
@@ -4367,107 +4414,135 @@ def analyze_traffic_attribution(gsc_df, ga4_df=None):
         'weighted_ctr_now': weighted_ctr_now,
         'weighted_ctr_prev': weighted_ctr_prev,
         'ctr_delta_pp': ctr_delta_pp,
-        'weighted_pos_now': weighted_pos_now,
-        'weighted_pos_prev': weighted_pos_prev,
-        'pos_delta': pos_delta,
-        'performance_pattern': pattern,
-        'ga4_analysis': ga4_analysis,
-        'raw_data': gsc_df
+        'top_gaining_queries': top_gaining_queries,
+        'top_losing_queries': top_losing_queries,
+        'total_queries': len(gsc_df)
     }
 
-
-def analyze_ga4_traffic(ga4_df):
-    """Analyze GA4 organic traffic data for validation"""
+def analyze_ga4_traffic_detailed(ga4_df):
+    """Detailed GA4 traffic analysis"""
     
-    # Look for organic search data
-    organic_row = None
-    
-    # Try to find organic search row
-    if 'Default channel group' in ga4_df.columns or 'Session default channel group' in ga4_df.columns:
-        channel_col = find_column(ga4_df.columns, ['default channel group', 'session default channel group', 'channel'])
-        if channel_col:
-            organic_mask = ga4_df[channel_col].str.contains('Organic', case=False, na=False)
-            if organic_mask.any():
-                organic_row = ga4_df[organic_mask].iloc[0]
-    
-    if organic_row is None:
-        # If no channel column, assume the data is already filtered to organic
-        organic_row = ga4_df.iloc[0] if len(ga4_df) > 0 else None
-    
-    if organic_row is None:
-        return None
-    
-    # Extract metrics
+    # Find columns
     sessions_col = find_column(ga4_df.columns, ['sessions'])
     users_col = find_column(ga4_df.columns, ['users', 'active users'])
     engaged_sessions_col = find_column(ga4_df.columns, ['engaged sessions'])
     events_col = find_column(ga4_df.columns, ['key events', 'conversions', 'events'])
+    bounce_rate_col = find_column(ga4_df.columns, ['bounce rate'])
+    avg_duration_col = find_column(ga4_df.columns, ['average engagement time', 'avg engagement time'])
+    
+    # Extract metrics (assuming organic search is already filtered or is the main row)
+    row = ga4_df.iloc[0] if len(ga4_df) > 0 else None
+    
+    if row is None:
+        return None
     
     analysis = {}
     
     if sessions_col:
-        analysis['sessions'] = pd.to_numeric(organic_row[sessions_col], errors='coerce')
+        analysis['sessions'] = pd.to_numeric(row[sessions_col], errors='coerce')
     if users_col:
-        analysis['users'] = pd.to_numeric(organic_row[users_col], errors='coerce')
+        analysis['users'] = pd.to_numeric(row[users_col], errors='coerce')
     if engaged_sessions_col:
-        analysis['engaged_sessions'] = pd.to_numeric(organic_row[engaged_sessions_col], errors='coerce')
+        analysis['engaged_sessions'] = pd.to_numeric(row[engaged_sessions_col], errors='coerce')
     if events_col:
-        analysis['key_events'] = pd.to_numeric(organic_row[events_col], errors='coerce')
+        analysis['key_events'] = pd.to_numeric(row[events_col], errors='coerce')
+    if bounce_rate_col:
+        analysis['bounce_rate'] = pd.to_numeric(row[bounce_rate_col], errors='coerce')
+    if avg_duration_col:
+        analysis['avg_engagement_time'] = pd.to_numeric(row[avg_duration_col], errors='coerce')
     
     # Calculate engagement rate
     if 'sessions' in analysis and 'engaged_sessions' in analysis and analysis['sessions'] > 0:
         analysis['engagement_rate'] = (analysis['engaged_sessions'] / analysis['sessions'] * 100)
     
+    # Calculate conversion rate
+    if 'sessions' in analysis and 'key_events' in analysis and analysis['sessions'] > 0:
+        analysis['conversion_rate'] = (analysis['key_events'] / analysis['sessions'] * 100)
+    
     return analysis
 
-
-def analyze_performance_pattern(clicks_delta, impr_delta, ctr_delta_pp, pos_delta):
-    """Analyze performance pattern to provide insights"""
+def analyze_ga4_landing_pages(ga4_df):
+    """Analyze GA4 landing page performance"""
     
-    if clicks_delta < 0 and impr_delta > 0:
-        return {
-            'type': 'ctr_pressure',
-            'description': 'CTR Pressure Pattern',
-            'detail': 'Visibility increased but clicks decreased - likely SERP feature or competitive CTR pressure',
-            'color': 'warning',
-            'icon': '⚠️'
-        }
-    elif clicks_delta < 0 and impr_delta < 0:
-        return {
-            'type': 'demand_decline', 
-            'description': 'Demand Decline Pattern',
-            'detail': 'Both clicks and impressions decreased - check rankings, indexing, or seasonality',
-            'color': 'error',
-            'icon': '📉'
-        }
-    elif clicks_delta > 0 and impr_delta > 0:
-        return {
-            'type': 'broad_growth',
-            'description': 'Broad Growth Pattern',
-            'detail': 'Both clicks and impressions increased - strong SEO momentum',
-            'color': 'success',
-            'icon': '📈'
-        }
-    elif clicks_delta > 0 and impr_delta <= 0:
-        return {
-            'type': 'efficiency_gains',
-            'description': 'Efficiency Gains Pattern', 
-            'detail': 'Clicks increased despite flat/declining impressions - improved rankings or CTR',
-            'color': 'success',
-            'icon': '🎯'
-        }
-    else:
-        return {
-            'type': 'stable',
-            'description': 'Stable Performance',
-            'detail': 'Minimal changes in both clicks and impressions',
-            'color': 'info',
-            'icon': '📊'
-        }
+    # Find columns
+    landing_col = find_column(ga4_df.columns, ['landing page', 'page'])
+    sessions_col = find_column(ga4_df.columns, ['sessions'])
+    users_col = find_column(ga4_df.columns, ['users', 'active users'])
+    engaged_sessions_col = find_column(ga4_df.columns, ['engaged sessions'])
+    events_col = find_column(ga4_df.columns, ['key events', 'conversions'])
+    avg_duration_col = find_column(ga4_df.columns, ['average engagement time', 'avg engagement time'])
+    
+    # Build working dataframe
+    work_df = pd.DataFrame()
+    work_df['Landing_Page'] = ga4_df[landing_col].astype(str)
+    work_df['Sessions'] = pd.to_numeric(ga4_df[sessions_col], errors='coerce')
+    
+    if users_col:
+        work_df['Users'] = pd.to_numeric(ga4_df[users_col], errors='coerce')
+    if engaged_sessions_col:
+        work_df['Engaged_Sessions'] = pd.to_numeric(ga4_df[engaged_sessions_col], errors='coerce')
+    if events_col:
+        work_df['Key_Events'] = pd.to_numeric(ga4_df[events_col], errors='coerce')
+    if avg_duration_col:
+        work_df['Avg_Engagement_Time'] = pd.to_numeric(ga4_df[avg_duration_col], errors='coerce')
+    
+    # Calculate rates
+    if 'Engaged_Sessions' in work_df.columns:
+        work_df['Engagement_Rate'] = (work_df['Engaged_Sessions'] / work_df['Sessions'] * 100).round(2)
+    if 'Key_Events' in work_df.columns:
+        work_df['Conversion_Rate'] = (work_df['Key_Events'] / work_df['Sessions'] * 100).round(2)
+    
+    # Sort by sessions
+    work_df = work_df.sort_values('Sessions', ascending=False)
+    
+    # Top performers
+    top_pages_by_sessions = work_df.head(20)
+    
+    # High conversion pages (if conversion data available)
+    high_conversion_pages = pd.DataFrame()
+    if 'Conversion_Rate' in work_df.columns:
+        high_conversion_pages = work_df[work_df['Sessions'] >= 10].sort_values('Conversion_Rate', ascending=False).head(15)
+    
+    return {
+        'total_sessions': work_df['Sessions'].sum(),
+        'total_pages': len(work_df),
+        'top_pages': top_pages_by_sessions,
+        'high_conversion_pages': high_conversion_pages,
+        'avg_engagement_rate': work_df['Engagement_Rate'].mean() if 'Engagement_Rate' in work_df.columns else None,
+        'avg_conversion_rate': work_df['Conversion_Rate'].mean() if 'Conversion_Rate' in work_df.columns else None
+    }
 
+def generate_integrated_insights(gsc_analysis, ga4_traffic, ga4_landing):
+    """Generate insights combining all three data sources"""
+    insights = []
+    
+    # GSC vs GA4 validation
+    gsc_clicks = gsc_analysis['total_clicks_now']
+    ga4_sessions = ga4_traffic.get('sessions', 0) if ga4_traffic else 0
+    
+    if gsc_clicks > 0 and ga4_sessions > 0:
+        click_to_session_ratio = ga4_sessions / gsc_clicks
+        if click_to_session_ratio < 0.7:
+            insights.append("Traffic Validation: GA4 sessions significantly lower than GSC clicks - investigate tracking or filtering issues")
+        elif click_to_session_ratio > 1.3:
+            insights.append("Traffic Validation: GA4 sessions higher than GSC clicks - may include non-organic traffic or different attribution models")
+        else:
+            insights.append("Traffic Validation: GSC clicks and GA4 sessions align well, confirming data accuracy")
+    
+    # Performance patterns
+    if gsc_analysis['clicks_delta'] < 0:
+        if ga4_traffic and ga4_traffic.get('engagement_rate', 0) > 60:
+            insights.append("Quality vs Quantity: Click volume declined but high engagement rate suggests better traffic quality")
+    
+    # Landing page opportunities
+    if ga4_landing and ga4_landing['avg_conversion_rate']:
+        if ga4_landing['avg_conversion_rate'] < 2:
+            insights.append("Conversion Opportunity: Low average conversion rate across landing pages - optimize CTAs and user experience")
+    
+    return insights
 
-def display_attribution_results(results):
-    """Display traffic attribution analysis results"""
+def display_comprehensive_results(results):
+    """Display comprehensive analysis results"""
     
     # Performance Pattern Header
     pattern = results['performance_pattern']
@@ -4479,221 +4554,126 @@ def display_attribution_results(results):
     </div>
     """, unsafe_allow_html=True)
     
-    # Key metrics
-    st.markdown('<div class="section-header">📈 Sitewide Performance Summary</div>', unsafe_allow_html=True)
+    # Combined Key Metrics
+    st.markdown('<div class="section-header">📈 Comprehensive Performance Summary</div>', unsafe_allow_html=True)
     
     col1, col2, col3, col4 = st.columns(4)
     
+    gsc = results['gsc_analysis']
+    ga4_traffic = results['ga4_traffic']
+    ga4_landing = results['ga4_landing']
+    
     with col1:
-        delta_color = "normal" if results['clicks_delta'] >= 0 else "inverse"
         st.metric(
-            label="Total Clicks Change",
-            value=f"{results['clicks_delta']:,}",
-            delta=f"{results['clicks_pct_change']:+.1f}%",
-            delta_color=delta_color
+            label="GSC Clicks Change",
+            value=f"{gsc['clicks_delta']:,}",
+            delta=f"{gsc['clicks_pct_change']:+.1f}%"
         )
     
     with col2:
-        delta_color = "normal" if results['impr_delta'] >= 0 else "inverse"
-        st.metric(
-            label="Total Impressions Change",
-            value=f"{results['impr_delta']:,}",
-            delta=f"{results['impr_pct_change']:+.1f}%",
-            delta_color=delta_color
-        )
-    
-    with col3:
-        delta_color = "normal" if results['ctr_delta_pp'] >= 0 else "inverse"
-        st.metric(
-            label="Weighted CTR",
-            value=f"{results['weighted_ctr_now']:.2f}%",
-            delta=f"{results['ctr_delta_pp']:+.2f}pp",
-            delta_color=delta_color,
-            help="Site-wide click-through rate (total clicks / total impressions)"
-        )
-    
-    with col4:
-        if results['pos_delta'] is not None:
-            delta_color = "inverse" if results['pos_delta'] > 0 else "normal"  # Lower position is better
+        if ga4_traffic and 'sessions' in ga4_traffic:
             st.metric(
-                label="Avg Position Change",
-                value=f"{results['weighted_pos_now']:.1f}",
-                delta=f"{results['pos_delta']:+.1f}",
-                delta_color=delta_color,
-                help="Weighted average position across all keywords"
+                label="GA4 Organic Sessions",
+                value=f"{ga4_traffic['sessions']:,}"
             )
         else:
-            st.metric(label="Avg Position", value="N/A", help="Position data not available")
+            st.metric(label="GA4 Sessions", value="N/A")
     
-    # Detailed breakdown
-    st.markdown('<div class="section-header">📊 Detailed Performance Breakdown</div>', unsafe_allow_html=True)
+    with col3:
+        if ga4_traffic and 'engagement_rate' in ga4_traffic:
+            st.metric(
+                label="Engagement Rate",
+                value=f"{ga4_traffic['engagement_rate']:.1f}%"
+            )
+        else:
+            st.metric(label="Engagement Rate", value="N/A")
     
-    # Performance comparison chart
-    metrics = ['Clicks', 'Impressions'] 
-    current_values = [results['total_clicks_now'], results['total_impr_now']]
-    previous_values = [results['total_clicks_prev'], results['total_impr_prev']]
+    with col4:
+        if ga4_landing and ga4_landing['avg_conversion_rate']:
+            st.metric(
+                label="Avg Conversion Rate",
+                value=f"{ga4_landing['avg_conversion_rate']:.2f}%"
+            )
+        else:
+            st.metric(label="Conversion Rate", value="N/A")
     
-    fig_comparison = go.Figure()
+    # GSC Query Performance
+    st.markdown('<div class="section-header">📊 Query Performance Analysis</div>', unsafe_allow_html=True)
     
-    fig_comparison.add_trace(go.Bar(
-        name='Previous Period',
-        x=metrics,
-        y=previous_values,
-        marker_color='lightblue',
-        text=[f"{val:,.0f}" for val in previous_values],
-        textposition='auto'
-    ))
+    query_col1, query_col2 = st.columns(2)
     
-    fig_comparison.add_trace(go.Bar(
-        name='Current Period',
-        x=metrics,
-        y=current_values,
-        marker_color='darkblue',
-        text=[f"{val:,.0f}" for val in current_values],
-        textposition='auto'
-    ))
+    with query_col1:
+        st.markdown("**Top Gaining Queries**")
+        if not gsc['top_gaining_queries'].empty:
+            gaining_display = gsc['top_gaining_queries'][['Query', 'Clicks_Delta']].head(10) if 'Query' in gsc['top_gaining_queries'].columns else pd.DataFrame()
+            if not gaining_display.empty:
+                st.dataframe(gaining_display, use_container_width=True, hide_index=True)
     
-    fig_comparison.update_layout(
-        title=dict(text='Performance Comparison: Current vs Previous Period', font=dict(size=20)),
-        xaxis_title='Metrics',
-        yaxis_title='Volume',
-        barmode='group',
-        height=500,
-        margin=dict(l=60, r=60, t=80, b=60),
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)'
-    )
+    with query_col2:
+        st.markdown("**Top Losing Queries**")
+        if not gsc['top_losing_queries'].empty:
+            losing_display = gsc['top_losing_queries'][['Query', 'Clicks_Delta']].head(10) if 'Query' in gsc['top_losing_queries'].columns else pd.DataFrame()
+            if not losing_display.empty:
+                st.dataframe(losing_display, use_container_width=True, hide_index=True)
     
-    st.plotly_chart(fig_comparison, use_container_width=True, config={'displayModeBar': False})
-    
-    # Performance table
-    performance_table = pd.DataFrame({
-        'Metric': ['Total Clicks', 'Total Impressions', 'Weighted CTR (%)', 'Weighted Position'],
-        'Previous Period': [
-            f"{results['total_clicks_prev']:,.0f}",
-            f"{results['total_impr_prev']:,.0f}", 
-            f"{results['weighted_ctr_prev']:.2f}%",
-            f"{results['weighted_pos_prev']:.1f}" if results['weighted_pos_prev'] else "N/A"
-        ],
-        'Current Period': [
-            f"{results['total_clicks_now']:,.0f}",
-            f"{results['total_impr_now']:,.0f}",
-            f"{results['weighted_ctr_now']:.2f}%", 
-            f"{results['weighted_pos_now']:.1f}" if results['weighted_pos_now'] else "N/A"
-        ],
-        'Change': [
-            f"{results['clicks_delta']:+,.0f} ({results['clicks_pct_change']:+.1f}%)",
-            f"{results['impr_delta']:+,.0f} ({results['impr_pct_change']:+.1f}%)",
-            f"{results['ctr_delta_pp']:+.2f}pp",
-            f"{results['pos_delta']:+.1f}" if results['pos_delta'] else "N/A"
-        ]
-    })
-    
-    st.dataframe(performance_table, use_container_width=True, hide_index=True)
-    
-    # GA4 validation if available
-    if results['ga4_analysis'] is not None:
-        st.markdown('<div class="section-header">✅ GA4 Validation</div>', unsafe_allow_html=True)
-        st.markdown("*Confirming organic search impact in GA4 sessions data*")
+    # Landing Page Performance
+    if ga4_landing and not ga4_landing['top_pages'].empty:
+        st.markdown('<div class="section-header">📄 Landing Page Performance</div>', unsafe_allow_html=True)
         
-        ga4 = results['ga4_analysis']
+        # Top pages by sessions
+        st.markdown("**Top Landing Pages by Sessions**")
+        display_cols = ['Landing_Page', 'Sessions']
+        if 'Engagement_Rate' in ga4_landing['top_pages'].columns:
+            display_cols.append('Engagement_Rate')
+        if 'Conversion_Rate' in ga4_landing['top_pages'].columns:
+            display_cols.append('Conversion_Rate')
         
-        ga4_col1, ga4_col2, ga4_col3, ga4_col4 = st.columns(4)
+        pages_display = ga4_landing['top_pages'][display_cols].head(15)
+        st.dataframe(pages_display, use_container_width=True, hide_index=True)
         
-        if 'sessions' in ga4:
-            with ga4_col1:
-                st.metric(label="Organic Sessions", value=f"{ga4['sessions']:,.0f}")
-        
-        if 'users' in ga4:
-            with ga4_col2:
-                st.metric(label="Organic Users", value=f"{ga4['users']:,.0f}")
-        
-        if 'engagement_rate' in ga4:
-            with ga4_col3:
-                st.metric(label="Engagement Rate", value=f"{ga4['engagement_rate']:.1f}%")
-        
-        if 'key_events' in ga4:
-            with ga4_col4:
-                st.metric(label="Key Events", value=f"{ga4['key_events']:,.0f}")
+        # High conversion pages
+        if not ga4_landing['high_conversion_pages'].empty:
+            st.markdown("**Highest Converting Landing Pages**")
+            conversion_display = ga4_landing['high_conversion_pages'][['Landing_Page', 'Sessions', 'Conversion_Rate']].head(10)
+            st.dataframe(conversion_display, use_container_width=True, hide_index=True)
     
-    # Strategic insights
-    st.markdown('<div class="section-header">💡 Strategic Insights</div>', unsafe_allow_html=True)
-    insights = generate_attribution_insights(results)
-    st.markdown(f'<div class="insight-box">{insights}</div>', unsafe_allow_html=True)
+    # Integrated Insights
+    st.markdown('<div class="section-header">💡 Integrated Strategic Insights</div>', unsafe_allow_html=True)
     
-    # Download section
-    st.markdown('<div class="section-header">📥 Download Results</div>', unsafe_allow_html=True)
+    all_insights = results['integrated_insights']
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        summary_report = create_attribution_summary_report(results)
-        st.download_button(
-            label="📄 Download Attribution Report",
-            data=summary_report,
-            file_name=f"traffic_attribution_analysis_{datetime.now().strftime('%Y%m%d')}.txt",
-            mime="text/plain"
-        )
-    
-    with col2:
-        csv_buffer = io.StringIO()
-        performance_table.to_csv(csv_buffer, index=False)
-        
-        st.download_button(
-            label="📊 Download Performance Data (CSV)",
-            data=csv_buffer.getvalue(),
-            file_name=f"traffic_attribution_data_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv"
-        )
-
-
-def generate_attribution_insights(results):
-    """Generate strategic insights from traffic attribution analysis"""
-    insights = []
-    
-    pattern = results['performance_pattern']
-    clicks_delta = results['clicks_delta']
-    impr_delta = results['impr_delta']
-    ctr_delta = results['ctr_delta_pp']
-    
-    # Pattern-specific insights
+    # Add pattern-specific insights
     if pattern['type'] == 'ctr_pressure':
-        insights.append(f"<b>⚠️ CTR Challenge:</b> With impressions up {results['impr_pct_change']:+.1f}% but clicks down {abs(results['clicks_pct_change']):.1f}%, you're losing click share to SERP features, ads, or competitors. Focus on snippet optimization and competitive analysis.")
-    elif pattern['type'] == 'demand_decline':
-        insights.append(f"<b>📉 Multi-Factor Decline:</b> Both visibility and clicks declined, suggesting broader issues like ranking losses, indexing problems, or seasonal demand shifts. Audit technical SEO and content freshness.")
+        all_insights.append("CTR Challenge: Focus on snippet optimization and competitive analysis to reclaim lost click share")
     elif pattern['type'] == 'broad_growth':
-        insights.append(f"<b>🚀 Strong Momentum:</b> Both impressions (+{results['impr_pct_change']:.1f}%) and clicks (+{results['clicks_pct_change']:.1f}%) grew - excellent SEO performance. Maintain current strategy and scale successful tactics.")
-    elif pattern['type'] == 'efficiency_gains':
-        insights.append(f"<b>🎯 Optimization Success:</b> Clicks increased {results['clicks_pct_change']:+.1f}% despite flat impressions - you're capturing more clicks from existing visibility through better rankings or CTR.")
+        all_insights.append("Strong Performance: Maintain current strategy and scale successful tactics across more keywords")
     
-    # CTR analysis
-    if abs(ctr_delta) > 0.5:
-        direction = "improved" if ctr_delta > 0 else "declined"
-        magnitude = "significantly" if abs(ctr_delta) > 1.0 else "moderately"
-        insights.append(f"<b>📊 CTR Trend:</b> Weighted CTR {direction} {magnitude} by {abs(ctr_delta):.2f} percentage points. This {'confirms ranking/snippet improvements' if ctr_delta > 0 else 'suggests SERP competitive pressure'}.")
+    if all_insights:
+        for insight in all_insights:
+            st.markdown(f"• {insight}")
+    else:
+        st.info("Analysis complete - review individual metrics above for detailed insights")
     
-    # Position context
-    if results['pos_delta'] is not None:
-        if abs(results['pos_delta']) > 1:
-            direction = "improved" if results['pos_delta'] < 0 else "declined"
-            insights.append(f"<b>📍 Ranking Movement:</b> Average position {direction} by {abs(results['pos_delta']):.1f} positions, {'supporting' if results['pos_delta'] < 0 else 'explaining'} the click performance changes.")
+    # Download comprehensive report
+    st.markdown('<div class="section-header">📥 Download Comprehensive Report</div>', unsafe_allow_html=True)
     
-    # GA4 validation
-    if results['ga4_analysis']:
-        insights.append("<b>✅ GA4 Confirmation:</b> Organic session data confirms the GSC click trends, validating business impact and ruling out tracking discrepancies.")
-    
-    # Action recommendations
-    if pattern['type'] in ['ctr_pressure', 'demand_decline']:
-        insights.append("<b>🎯 Immediate Actions:</b> Prioritize your top declining queries from Query Analysis, refresh high-value content, and audit technical SEO fundamentals.")
-    
-    return "<br><br>".join(insights)
+    comprehensive_report = create_comprehensive_report(results)
+    st.download_button(
+        label="📄 Download Complete Attribution Analysis",
+        data=comprehensive_report,
+        file_name=f"comprehensive_attribution_analysis_{datetime.now().strftime('%Y%m%d')}.txt",
+        mime="text/plain"
+    )
 
-
-def create_attribution_summary_report(results):
-    """Create downloadable traffic attribution report"""
+def create_comprehensive_report(results):
+    """Create comprehensive downloadable report"""
+    
+    gsc = results['gsc_analysis']
+    ga4_traffic = results['ga4_traffic']
+    ga4_landing = results['ga4_landing']
     
     report = f"""
-TRAFFIC ATTRIBUTION ANALYSIS REPORT
+COMPREHENSIVE TRAFFIC ATTRIBUTION ANALYSIS
 Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
 ===========================================
@@ -4703,41 +4683,56 @@ EXECUTIVE SUMMARY
 Performance Pattern: {results['performance_pattern']['description']}
 {results['performance_pattern']['detail']}
 
-Key Metrics Changes:
-• Total Clicks: {results['clicks_delta']:,} ({results['clicks_pct_change']:+.1f}%)
-• Total Impressions: {results['impr_delta']:,} ({results['impr_pct_change']:+.1f}%)  
-• Weighted CTR: {results['ctr_delta_pp']:+.2f}pp (now {results['weighted_ctr_now']:.2f}%)
-• Weighted Position: {results['pos_delta']:+.1f if results['pos_delta'] else 'N/A'} (now {results['weighted_pos_now']:.1f if results['weighted_pos_now'] else 'N/A'})
-
 ===========================================
-DETAILED PERFORMANCE BREAKDOWN
+GSC QUERY PERFORMANCE
 ===========================================
 
-Current Period:
-• Clicks: {results['total_clicks_now']:,.0f}
-• Impressions: {results['total_impr_now']:,.0f}
-• Weighted CTR: {results['weighted_ctr_now']:.2f}%
-• Weighted Position: {results['weighted_pos_now']:.1f if results['weighted_pos_now'] else 'N/A'}
+Total Queries Analyzed: {gsc['total_queries']:,}
+Click Performance:
+- Current Period: {gsc['total_clicks_now']:,} clicks
+- Previous Period: {gsc['total_clicks_prev']:,} clicks  
+- Change: {gsc['clicks_delta']:,} ({gsc['clicks_pct_change']:+.1f}%)
 
-Previous Period:
-• Clicks: {results['total_clicks_prev']:,.0f}  
-• Impressions: {results['total_impr_prev']:,.0f}
-• Weighted CTR: {results['weighted_ctr_prev']:.2f}%
-• Weighted Position: {results['weighted_pos_prev']:.1f if results['weighted_pos_prev'] else 'N/A'}
+Impression Performance:
+- Current Period: {gsc['total_impr_now']:,} impressions
+- Previous Period: {gsc['total_impr_prev']:,} impressions
+- Change: {gsc['impr_delta']:,} ({gsc['impr_pct_change']:+.1f}%)
+
+Weighted CTR: {gsc['weighted_ctr_now']:.2f}% (Δ {gsc['ctr_delta_pp']:+.2f}pp)
 
 ===========================================
-GA4 VALIDATION DATA
+GA4 TRAFFIC ACQUISITION
 ===========================================
 
 """
     
-    if results['ga4_analysis']:
-        ga4 = results['ga4_analysis']
-        for metric, value in ga4.items():
+    if ga4_traffic:
+        for metric, value in ga4_traffic.items():
             if isinstance(value, (int, float)) and not pd.isna(value):
-                report += f"• {metric.replace('_', ' ').title()}: {value:,.0f if metric != 'engagement_rate' else value:.1f}{'%' if metric == 'engagement_rate' else ''}\n"
+                unit = "%" if "rate" in metric else ""
+                report += f"• {metric.replace('_', ' ').title()}: {value:,.1f}{unit}\n"
     else:
-        report += "GA4 data not provided\n"
+        report += "GA4 Traffic data not available\n"
+    
+    report += f"""
+
+===========================================
+GA4 LANDING PAGE PERFORMANCE
+===========================================
+
+"""
+    
+    if ga4_landing:
+        report += f"""Total Landing Pages: {ga4_landing['total_pages']:,}
+Total Sessions: {ga4_landing['total_sessions']:,}
+Average Engagement Rate: {ga4_landing['avg_engagement_rate']:.1f}%
+Average Conversion Rate: {ga4_landing['avg_conversion_rate']:.2f}%
+
+Top Landing Pages:
+"""
+        if not ga4_landing['top_pages'].empty:
+            for _, row in ga4_landing['top_pages'].head(10).iterrows():
+                report += f"• {row['Landing_Page']} - {row['Sessions']:,} sessions\n"
     
     report += f"""
 
@@ -4745,8 +4740,12 @@ GA4 VALIDATION DATA
 STRATEGIC INSIGHTS
 ===========================================
 
-{generate_attribution_insights(results).replace('<b>', '').replace('</b>', '').replace('<br><br>', '\n\n').replace('⚠️', '• ').replace('📉', '• ').replace('🚀', '• ').replace('🎯', '• ').replace('📊', '• ').replace('📍', '• ').replace('✅', '• ')}
-
+"""
+    
+    for insight in results['integrated_insights']:
+        report += f"• {insight}\n"
+    
+    report += """
 ===========================================
 """
     
