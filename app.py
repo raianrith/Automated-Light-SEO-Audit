@@ -7,6 +7,11 @@ import numpy as np
 import re
 from datetime import datetime
 import io
+from docx import Document
+from docx.shared import Inches, Pt
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+import matplotlib.pyplot as plt
+
 
 # Configure page
 st.set_page_config(
@@ -158,6 +163,295 @@ def main():
         comprehensive_report_tab()
     
 # Helper functions for file processing
+
+# ===================== REPORT HELPERS & BUILDER (PUT ABOVE comprehensive_report_tab) =====================
+
+def _load_df(uploaded_file):
+    """Read CSV/XLS/XLSX to DataFrame with normalized columns. Returns None if not provided/failed."""
+    if not uploaded_file:
+        return None
+    name = getattr(uploaded_file, "name", "").lower()
+    try:
+        if name.endswith(".csv"):
+            df = pd.read_csv(uploaded_file)
+        elif name.endswith(".xlsx") or name.endswith(".xls"):
+            df = pd.read_excel(uploaded_file)
+        else:
+            # try CSV fallback
+            uploaded_file.seek(0)
+            df = pd.read_csv(uploaded_file)
+        # normalize columns
+        df.columns = [str(c).strip().lower().replace(" ", "_") for c in df.columns]
+        return df
+    except Exception:
+        return None
+
+
+# ---------- KPI formatting ----------
+def _k(v, default="—"):
+    if v is None:
+        return default
+    try:
+        if isinstance(v, float):
+            if abs(v) >= 1000:
+                return f"{v:,.0f}"
+            return f"{v:,.2f}"
+        if isinstance(v, (int, np.integer)):
+            return f"{int(v):,}"
+        return str(v)
+    except Exception:
+        return str(v)
+
+
+# ---------- Matplotlib -> PNG bytes ----------
+def _save_current_fig(width_in=6, height_in=3.2, dpi=140):
+    buf = io.BytesIO()
+    fig = plt.gcf()
+    fig.set_size_inches(width_in, height_in)
+    plt.tight_layout()
+    fig.savefig(buf, format="png", dpi=dpi, bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    return buf.getvalue()
+
+def _bar(labels, vals, title=None, xlabel=None, ylabel=None, rotate=0):
+    plt.figure()
+    plt.bar(labels, vals)
+    if rotate:
+        plt.xticks(rotation=rotate, ha="right")
+    if title: plt.title(title)
+    if xlabel: plt.xlabel(xlabel)
+    if ylabel: plt.ylabel(ylabel)
+    return _save_current_fig()
+
+def _barh(labels, vals, title=None, xlabel=None, ylabel=None):
+    plt.figure()
+    plt.barh(labels, vals)
+    if title: plt.title(title)
+    if xlabel: plt.xlabel(xlabel)
+    if ylabel: plt.ylabel(ylabel)
+    return _save_current_fig()
+
+def _pie(labels, vals, title=None):
+    plt.figure()
+    plt.pie(vals, labels=labels, autopct="%1.0f%%", startangle=90)
+    plt.axis("equal")
+    if title: plt.title(title)
+    return _save_current_fig()
+
+
+# ---------- docx helpers ----------
+def _docx_title(doc: Document, title: str, subtitle: str | None = None):
+    h = doc.add_heading(title, level=0)
+    h.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    if subtitle:
+        p = doc.add_paragraph(subtitle)
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+def _docx_kpi_row(doc: Document, kpis: dict):
+    table = doc.add_table(rows=1, cols=len(kpis))
+    table.style = "Light List"
+    row = table.rows[0].cells
+    for i, (k, v) in enumerate(kpis.items()):
+        row[i].text = f"{k}\n{_k(v)}"
+
+def _docx_add_image(doc: Document, image_bytes: bytes, caption: str | None = None, width_in=6):
+    if not image_bytes:
+        return
+    doc.add_picture(io.BytesIO(image_bytes), width=Inches(width_in))
+    if caption:
+        cap = doc.add_paragraph(caption)
+        cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+def _docx_note(doc: Document, text: str, italic=False):
+    p = doc.add_paragraph()
+    r = p.add_run(text)
+    r.italic = italic
+
+
+# ---------- sections (only the 7 sources you picked) ----------
+def _section_semrush_visibility(doc: Document, current_df: pd.DataFrame | None, prev_df: pd.DataFrame | None):
+    if current_df is None and prev_df is None:
+        return
+    doc.add_heading("Overall Keyword Visibility (YoY)", level=1)
+
+    def top_share(df, cutoff):
+        if df is None or df.empty:
+            return None
+        pos_col = next((c for c in df.columns if c in {"position", "pos", "rank"}), None)
+        if not pos_col:  # try fuzzy match
+            pos_col = next((c for c in df.columns if "pos" in c), None)
+        if not pos_col:
+            return None
+        total = len(df)
+        top = (pd.to_numeric(df[pos_col], errors="coerce") <= cutoff).sum()
+        return (top / total) * 100 if total > 0 else None
+
+    kpis = {
+        "Keywords (Current)": len(current_df) if current_df is not None else None,
+        "Top 3 % (Current)": top_share(current_df, 3),
+        "Top 10 % (Current)": top_share(current_df, 10),
+        "Keywords (Prev)": len(prev_df) if prev_df is not None else None,
+        "Top 3 % (Prev)": top_share(prev_df, 3),
+        "Top 10 % (Prev)": top_share(prev_df, 10),
+    }
+    _docx_kpi_row(doc, kpis)
+
+    if current_df is not None and prev_df is not None:
+        labels = ["Current Keywords", "Previous Keywords"]
+        vals = [len(current_df), len(prev_df)]
+        try:
+            img = _bar(labels, vals, title="Keyword Footprint", ylabel="Count")
+            _docx_add_image(doc, img, caption="Total Keywords (Current vs Previous)")
+        except Exception:
+            pass
+
+    _docx_note(doc, "Interpretation: Compare footprint and quality YoY (higher Top 3/Top 10 shares are better).", italic=True)
+
+
+def _section_semrush_winners_losers(doc: Document, changes_df: pd.DataFrame | None, top_n=10):
+    if changes_df is None or changes_df.empty:
+        return
+    doc.add_heading("Top Gainers & Decliners (Semrush Position Changes)", level=1)
+
+    df = changes_df.copy()
+    kw_col = next((c for c in df.columns if "keyword" in c), None)
+    from_col = next((c for c in df.columns if "from" in c and "pos" in c), None)
+    to_col = next((c for c in df.columns if "to" in c and "pos" in c), None)
+
+    if from_col and to_col:
+        df["delta_pos"] = pd.to_numeric(df[from_col], errors="coerce") - pd.to_numeric(df[to_col], errors="coerce")
+    else:
+        df["delta_pos"] = np.nan
+
+    winners = df.sort_values("delta_pos", ascending=False).head(top_n)
+    losers = df.sort_values("delta_pos", ascending=True).head(top_n)
+
+    # winners
+    if not winners.empty and "delta_pos" in winners:
+        labels = list((winners[kw_col] if kw_col else winners.index).astype(str))
+        vals = list(pd.to_numeric(winners["delta_pos"], errors="coerce").fillna(0).values)
+        img = _barh(labels[::-1], vals[::-1], title="Top Winners (positions improved)", xlabel="Positions")
+        _docx_add_image(doc, img)
+
+    # losers
+    if not losers.empty and "delta_pos" in losers:
+        labels = list((losers[kw_col] if kw_col else losers.index).astype(str))
+        vals = list((-pd.to_numeric(losers["delta_pos"], errors="coerce")).fillna(0).values)
+        img = _barh(labels[::-1], vals[::-1], title="Top Losers (positions dropped)", xlabel="Positions")
+        _docx_add_image(doc, img)
+
+    _docx_note(doc, "Interpretation: Gains on transactional terms vs losses on informational terms can reflect SERP/intent shifts.", italic=True)
+
+
+def _section_semrush_pages(doc: Document, pages_df: pd.DataFrame | None, top_n=10):
+    if pages_df is None or pages_df.empty:
+        return
+    doc.add_heading("Top Pages by Estimated Visits (Semrush Pages)", level=1)
+    url_col = next((c for c in pages_df.columns if "url" in c or "page" in c), None)
+    visits_col = next((c for c in pages_df.columns if "visit" in c or "traffic" in c or "est" in c), None)
+    if not url_col or not visits_col:
+        _docx_note(doc, "Skipped: required columns not found (URL/Visits).", italic=True)
+        return
+    top = pages_df.sort_values(visits_col, ascending=False).head(top_n)
+    labels = list(top[url_col].astype(str).values)
+    vals = list(pd.to_numeric(top[visits_col], errors="coerce").fillna(0).values)
+    img = _barh(labels[::-1], vals[::-1], title="Top Pages (Estimated Visits)", xlabel="Visits")
+    _docx_add_image(doc, img)
+    _docx_note(doc, "Why it matters: Protect & grow commercial-intent pages; support with internal links and content.", italic=True)
+
+
+def _section_semrush_competitors(doc: Document, competitors_df: pd.DataFrame | None):
+    if competitors_df is None or competitors_df.empty:
+        return
+    doc.add_heading("Competitor Benchmark (Semrush)", level=1)
+    name_col = next((c for c in competitors_df.columns if "domain" in c or "competitor" in c), None)
+    traffic_col = next((c for c in competitors_df.columns if "traffic" in c or "visit" in c), None)
+
+    if name_col and traffic_col:
+        tbl = competitors_df[[name_col, traffic_col]].dropna().head(8)
+        labels = list(tbl[name_col].astype(str).values)
+        vals = list(pd.to_numeric(tbl[traffic_col], errors="coerce").fillna(0).values)
+        img = _barh(labels[::-1], vals[::-1], title="Competitor Estimated Traffic", xlabel="Visits")
+        _docx_add_image(doc, img)
+    _docx_note(doc, "Interpretation: Higher traffic with similar overlap suggests authority/content depth gaps.", italic=True)
+
+
+def _section_gsc_queries(doc: Document, queries_df: pd.DataFrame | None):
+    if queries_df is None or queries_df.empty:
+        return
+    doc.add_heading("GSC Query Trends", level=1)
+    click_col = next((c for c in queries_df.columns if "click" in c), None)
+    imp_col = next((c for c in queries_df.columns if "impression" in c), None)
+    query_col = next((c for c in queries_df.columns if "query" in c), None)
+
+    kpis = {}
+    if click_col: kpis["Clicks"] = pd.to_numeric(queries_df[click_col], errors="coerce").sum()
+    if imp_col:   kpis["Impressions"] = pd.to_numeric(queries_df[imp_col], errors="coerce").sum()
+    if kpis: _docx_kpi_row(doc, kpis)
+
+    if click_col and query_col:
+        top = queries_df.sort_values(click_col, ascending=False).head(10)
+        labels = list(top[query_col].astype(str).values)
+        vals = list(pd.to_numeric(top[click_col], errors="coerce").fillna(0).values)
+        img = _barh(labels[::-1], vals[::-1], title="Top Queries by Clicks", xlabel="Clicks")
+        _docx_add_image(doc, img)
+
+    _docx_note(doc, "Interpretation: Impressions up with clicks down → CTR erosion from richer SERPs or rank shifts.", italic=True)
+
+
+def _section_gsc_pages(doc: Document, pages_df: pd.DataFrame | None):
+    if pages_df is None or pages_df.empty:
+        return
+    doc.add_heading("GSC Pages (Top Performers / Slipping)", level=1)
+    url_col = next((c for c in pages_df.columns if "page" in c or "url" in c), None)
+    click_col = next((c for c in pages_df.columns if "click" in c), None)
+
+    if url_col and click_col:
+        top = pages_df.sort_values(click_col, ascending=False).head(10)
+        labels = list(top[url_col].astype(str).values)
+        vals = list(pd.to_numeric(top[click_col], errors="coerce").fillna(0).values)
+        img = _barh(labels[::-1], vals[::-1], title="Top Pages by Clicks", xlabel="Clicks")
+        _docx_add_image(doc, img)
+        _docx_note(doc, "Why it matters: Optimize top landers for conversion paths (CTAs, forms, speed).", italic=True)
+    else:
+        _docx_note(doc, "Skipped: required columns not found (URL/Clicks).", italic=True)
+
+
+def build_seo_audit_docx(
+    site_domain: str,
+    semrush_current_df: pd.DataFrame | None = None,
+    semrush_prev_df: pd.DataFrame | None = None,
+    semrush_changes_df: pd.DataFrame | None = None,
+    semrush_pages_df: pd.DataFrame | None = None,
+    semrush_comp_df: pd.DataFrame | None = None,
+    gsc_queries_df: pd.DataFrame | None = None,
+    gsc_pages_df: pd.DataFrame | None = None,
+) -> bytes:
+    """Master builder that composes all sections. Skips any missing dataset gracefully."""
+    doc = Document()
+    _docx_title(doc, f"SEO Performance Analysis for {site_domain}",
+                subtitle=datetime.now().strftime("%Y-%m-%d"))
+
+    doc.add_heading("Executive Summary", level=1)
+    _docx_note(doc,
+        f"{site_domain} SEO performance summary based on uploaded Semrush and GSC exports. "
+        "Sections without data were skipped. Charts and KPIs follow for each available source."
+    )
+
+    _section_semrush_visibility(doc, semrush_current_df, semrush_prev_df)
+    _section_semrush_winners_losers(doc, semrush_changes_df)
+    _section_semrush_pages(doc, semrush_pages_df)
+    _section_semrush_competitors(doc, semrush_comp_df)
+    _section_gsc_queries(doc, gsc_queries_df)
+    _section_gsc_pages(doc, gsc_pages_df)
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return buf.getvalue()
+# ===================== END REPORT HELPERS & BUILDER =====================
+
 def read_uploaded_file(uploaded_file):
     """Read uploaded CSV or Excel file"""
     if uploaded_file is not None:
@@ -4754,15 +5048,11 @@ STRATEGIC INSIGHTS
     
     return report
 
-from datetime import datetime  # make sure this import exists at top of file
 
 def comprehensive_report_tab():
-    import streamlit as st
-
     st.header("📝 Comprehensive SEO Report (.docx)")
     st.write("Upload the files you use elsewhere. Missing files will simply skip those sections.")
 
-    # UNIQUE key for this text input
     site_domain = st.text_input(
         "Site domain for the report title (e.g., falconstructures.com)",
         value="example.com",
@@ -4772,75 +5062,28 @@ def comprehensive_report_tab():
     st.subheader("Semrush")
     col1, col2 = st.columns(2)
     with col1:
-        semrush_current = st.file_uploader(
-            "Positions — Current (CSV/XLSX)",
-            type=["csv", "xlsx", "xls"],
-            key="cr_sem_pos_cur",  # unique
-            help="Semrush Organic Research → Positions export for the current period",
-        )
-        semrush_prev = st.file_uploader(
-            "Positions — Previous (CSV/XLSX)",
-            type=["csv", "xlsx", "xls"],
-            key="cr_sem_pos_prev",  # unique
-            help="Semrush Organic Research → Positions export for the equivalent past period",
-        )
-        semrush_changes = st.file_uploader(
-            "Position Changes (CSV/XLSX)",
-            type=["csv", "xlsx", "xls"],
-            key="cr_sem_changes",  # unique
-            help="Semrush Organic Research → Position Changes export (e.g., last 12 months)",
-        )
+        semrush_current = st.file_uploader("Positions — Current (CSV/XLSX)", type=["csv", "xlsx", "xls"], key="cr_sem_pos_cur")
+        semrush_prev    = st.file_uploader("Positions — Previous (CSV/XLSX)", type=["csv", "xlsx", "xls"], key="cr_sem_pos_prev")
+        semrush_changes = st.file_uploader("Position Changes (CSV/XLSX)",    type=["csv", "xlsx", "xls"], key="cr_sem_changes")
     with col2:
-        semrush_pages = st.file_uploader(
-            "Pages (CSV/XLSX)",
-            type=["csv", "xlsx", "xls"],
-            key="cr_sem_pages",  # unique
-            help="Semrush Organic Research → Pages export for the current period",
-        )
-        semrush_comp = st.file_uploader(
-            "Competitors (CSV/XLSX)",
-            type=["csv", "xlsx", "xls"],
-            key="cr_sem_comp",  # unique
-            help="Semrush Organic Research → Competitors export",
-        )
+        semrush_pages = st.file_uploader("Pages (CSV/XLSX)",        type=["csv", "xlsx", "xls"], key="cr_sem_pages")
+        semrush_comp  = st.file_uploader("Competitors (CSV/XLSX)",  type=["csv", "xlsx", "xls"], key="cr_sem_comp")
 
     st.subheader("Google Search Console")
-    gsc_queries = st.file_uploader(
-        "Queries Compare (CSV/XLSX)",
-        type=["csv", "xlsx", "xls"],
-        key="cr_gsc_queries",  # unique
-        help="GSC Queries report (optionally a compare export)",
-    )
-    gsc_pages = st.file_uploader(
-        "Pages Compare (CSV/XLSX)",
-        type=["csv", "xlsx", "xls"],
-        key="cr_gsc_pages",  # unique
-        help="GSC Pages report (optionally a compare export)",
-    )
+    gsc_queries = st.file_uploader("Queries Compare (CSV/XLSX)", type=["csv", "xlsx", "xls"], key="cr_gsc_queries")
+    gsc_pages   = st.file_uploader("Pages Compare (CSV/XLSX)",   type=["csv", "xlsx", "xls"], key="cr_gsc_pages")
 
-    # UNIQUE key for button
     if st.button("Generate Word Report", type="primary", use_container_width=True, key="cr_generate_btn"):
-        # helpers expected to exist in your file:
-        # read_uploaded_file(), normalize_columns()
-        def as_df(file_obj):
-            if not file_obj:
-                return None
-            try:
-                df = read_uploaded_file(file_obj)
-                return normalize_columns(df)
-            except Exception:
-                return None
-
         with st.spinner("Compiling Word document..."):
             docx_bytes = build_seo_audit_docx(
                 site_domain=site_domain.strip() or "example.com",
-                semrush_current_df=as_df(semrush_current),
-                semrush_prev_df=as_df(semrush_prev),
-                semrush_changes_df=as_df(semrush_changes),
-                semrush_pages_df=as_df(semrush_pages),
-                semrush_comp_df=as_df(semrush_comp),
-                gsc_queries_df=as_df(gsc_queries),
-                gsc_pages_df=as_df(gsc_pages),
+                semrush_current_df=_load_df(semrush_current),
+                semrush_prev_df=_load_df(semrush_prev),
+                semrush_changes_df=_load_df(semrush_changes),
+                semrush_pages_df=_load_df(semrush_pages),
+                semrush_comp_df=_load_df(semrush_comp),
+                gsc_queries_df=_load_df(gsc_queries),
+                gsc_pages_df=_load_df(gsc_pages),
             )
 
         st.success("Report generated.")
@@ -4850,10 +5093,11 @@ def comprehensive_report_tab():
             file_name=f"SEO_Performance_{(site_domain or 'example.com').replace('.', '_')}_{datetime.now().strftime('%Y%m%d')}.docx",
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             use_container_width=True,
-            key="cr_download_btn",  # unique
+            key="cr_download_btn",
         )
 
-    st.caption("Note: This tab does not render charts on-screen. Charts are embedded inside the Word report.")
+    st.caption("No charts render on-screen; they’re embedded inside the Word report.")
+
 
 
 if __name__ == "__main__":
