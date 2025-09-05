@@ -4,3 +4,4 @@ plotly
 numpy
 openpyxl   
 xlrd     
+python-docx==1.1.0
