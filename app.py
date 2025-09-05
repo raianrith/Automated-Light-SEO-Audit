@@ -4753,88 +4753,108 @@ STRATEGIC INSIGHTS
 """
     
     return report
+
+from datetime import datetime  # make sure this import exists at top of file
+
 def comprehensive_report_tab():
-    # Section header for the tab
-    st.markdown('<div class="section-header">📝 Comprehensive SEO Report</div>', unsafe_allow_html=True)
-    
-    # Brief overview/instructions
-    st.markdown("### 📄 Overview")
-    st.markdown(
-        "Upload all relevant **Semrush** and **GSC** export files below, then click **Generate Report**. "
-        "This will compile a comprehensive SEO audit with key metrics, charts, and narrative insights."
+    import streamlit as st
+
+    st.header("📝 Comprehensive SEO Report (.docx)")
+    st.write("Upload the files you use elsewhere. Missing files will simply skip those sections.")
+
+    # UNIQUE key for this text input
+    site_domain = st.text_input(
+        "Site domain for the report title (e.g., falconstructures.com)",
+        value="example.com",
+        key="cr_site_domain",
     )
-    st.info("*(Optional: You may omit certain files; the report will simply skip those sections.)*")
-    st.markdown("---")
-    
-    # Input for site/domain name to use in report title
-    site_domain = st.text_input("**Website Domain or Name** (for report title)", "")
-    if site_domain:
-        st.caption(f"Report will be titled *SEO Performance Analysis for {site_domain}*")
-    else:
-        st.caption("Enter your site or client name to include it in the report title.")
-    
-    # File upload fields for all required datasets
-    st.markdown("### 📤 Upload Data Files")
+
+    st.subheader("Semrush")
     col1, col2 = st.columns(2)
     with col1:
-        semrush_current_file = st.file_uploader("Semrush Positions – Current Period", type=['csv','xlsx','xls'], key="semrush_current",
-                                                help="Semrush Organic Research → Positions export for the current period")
-        semrush_prev_file    = st.file_uploader("Semrush Positions – Previous Period", type=['csv','xlsx','xls'], key="semrush_prev",
-                                                help="Semrush Organic Research → Positions export for the equivalent past period")
-        semrush_changes_file = st.file_uploader("Semrush Position Changes", type=['csv','xlsx','xls'], key="semrush_changes",
-                                                help="Semrush Organic Research → Position Changes export (e.g. last 12 months)")
-        semrush_pages_file   = st.file_uploader("Semrush Top Pages", type=['csv','xlsx','xls'], key="semrush_pages",
-                                                help="Semrush Organic Research → Pages export for the current period")
+        semrush_current = st.file_uploader(
+            "Positions — Current (CSV/XLSX)",
+            type=["csv", "xlsx", "xls"],
+            key="cr_sem_pos_cur",  # unique
+            help="Semrush Organic Research → Positions export for the current period",
+        )
+        semrush_prev = st.file_uploader(
+            "Positions — Previous (CSV/XLSX)",
+            type=["csv", "xlsx", "xls"],
+            key="cr_sem_pos_prev",  # unique
+            help="Semrush Organic Research → Positions export for the equivalent past period",
+        )
+        semrush_changes = st.file_uploader(
+            "Position Changes (CSV/XLSX)",
+            type=["csv", "xlsx", "xls"],
+            key="cr_sem_changes",  # unique
+            help="Semrush Organic Research → Position Changes export (e.g., last 12 months)",
+        )
     with col2:
-        semrush_comp_file  = st.file_uploader("Semrush Competitors", type=['csv','xlsx','xls'], key="semrush_comp",
-                                              help="Semrush Organic Research → Competitors export")
-        gsc_queries_file   = st.file_uploader("GSC Search Queries", type=['csv','xlsx','xls'], key="gsc_queries",
-                                              help="Google Search Console *Queries* report (e.g. comparing two date ranges)")
-        gsc_pages_file     = st.file_uploader("GSC Top Pages", type=['csv','xlsx','xls'], key="gsc_pages",
-                                              help="Google Search Console *Pages* report (top pages data)")
-    
-    # (Optional: If GA4 data will be integrated later, you could add file_uploader for GA4 exports here)
-    
-    # Only show the generate button when at least one file is uploaded and a site name is provided
-    files_provided = any([semrush_current_file, semrush_prev_file, semrush_changes_file,
-                          semrush_pages_file, semrush_comp_file, gsc_queries_file, gsc_pages_file])
-    if files_provided and site_domain:
-        generate_report = st.button("🚀 Generate Comprehensive Report", type="primary")
-        if generate_report:
-            with st.spinner("Compiling your SEO audit report..."):
-                # Read and normalize each uploaded file into a DataFrame (reuse existing helpers)
-                current_df   = normalize_columns(read_uploaded_file(semrush_current_file)) if semrush_current_file else None
-                prev_df      = normalize_columns(read_uploaded_file(semrush_prev_file))    if semrush_prev_file    else None
-                changes_df   = normalize_columns(read_uploaded_file(semrush_changes_file)) if semrush_changes_file else None
-                pages_df     = normalize_columns(read_uploaded_file(semrush_pages_file))   if semrush_pages_file   else None
-                comp_df      = normalize_columns(read_uploaded_file(semrush_comp_file))    if semrush_comp_file    else None
-                gsc_q_df     = normalize_columns(read_uploaded_file(gsc_queries_file))     if gsc_queries_file     else None
-                gsc_p_df     = normalize_columns(read_uploaded_file(gsc_pages_file))       if gsc_pages_file       else None
-                
-                # Build the comprehensive report using the master docx builder
-                report_bytes = build_seo_audit_docx(
-                    site_domain,
-                    semrush_current_df = current_df,
-                    semrush_prev_df    = prev_df,
-                    semrush_changes_df = changes_df,
-                    semrush_pages_df   = pages_df,
-                    semrush_comp_df    = comp_df,
-                    gsc_queries_df     = gsc_q_df,
-                    gsc_pages_df       = gsc_p_df
-                    # (GA4 parameters can be added here if needed in the future)
-                )
-                
-                # Provide a download button for the generated .docx file
-                if report_bytes:
-                    st.success("✅ Report generated! Download the Word document below:")
-                    st.download_button(
-                        label="📥 Download SEO Audit Report",
-                        data=report_bytes,
-                        file_name=f"SEO_Audit_Report_{site_domain}_{datetime.now().strftime('%Y%m%d')}.docx",
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                    )
-    else:
-        st.info("Please enter the site domain/name and upload at least one file to enable report generation.")
+        semrush_pages = st.file_uploader(
+            "Pages (CSV/XLSX)",
+            type=["csv", "xlsx", "xls"],
+            key="cr_sem_pages",  # unique
+            help="Semrush Organic Research → Pages export for the current period",
+        )
+        semrush_comp = st.file_uploader(
+            "Competitors (CSV/XLSX)",
+            type=["csv", "xlsx", "xls"],
+            key="cr_sem_comp",  # unique
+            help="Semrush Organic Research → Competitors export",
+        )
+
+    st.subheader("Google Search Console")
+    gsc_queries = st.file_uploader(
+        "Queries Compare (CSV/XLSX)",
+        type=["csv", "xlsx", "xls"],
+        key="cr_gsc_queries",  # unique
+        help="GSC Queries report (optionally a compare export)",
+    )
+    gsc_pages = st.file_uploader(
+        "Pages Compare (CSV/XLSX)",
+        type=["csv", "xlsx", "xls"],
+        key="cr_gsc_pages",  # unique
+        help="GSC Pages report (optionally a compare export)",
+    )
+
+    # UNIQUE key for button
+    if st.button("Generate Word Report", type="primary", use_container_width=True, key="cr_generate_btn"):
+        # helpers expected to exist in your file:
+        # read_uploaded_file(), normalize_columns()
+        def as_df(file_obj):
+            if not file_obj:
+                return None
+            try:
+                df = read_uploaded_file(file_obj)
+                return normalize_columns(df)
+            except Exception:
+                return None
+
+        with st.spinner("Compiling Word document..."):
+            docx_bytes = build_seo_audit_docx(
+                site_domain=site_domain.strip() or "example.com",
+                semrush_current_df=as_df(semrush_current),
+                semrush_prev_df=as_df(semrush_prev),
+                semrush_changes_df=as_df(semrush_changes),
+                semrush_pages_df=as_df(semrush_pages),
+                semrush_comp_df=as_df(semrush_comp),
+                gsc_queries_df=as_df(gsc_queries),
+                gsc_pages_df=as_df(gsc_pages),
+            )
+
+        st.success("Report generated.")
+        st.download_button(
+            label="📄 Download SEO Performance Report",
+            data=docx_bytes,
+            file_name=f"SEO_Performance_{(site_domain or 'example.com').replace('.', '_')}_{datetime.now().strftime('%Y%m%d')}.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            use_container_width=True,
+            key="cr_download_btn",  # unique
+        )
+
+    st.caption("Note: This tab does not render charts on-screen. Charts are embedded inside the Word report.")
+
 
 if __name__ == "__main__":
     main()
