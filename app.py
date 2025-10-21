@@ -153,14 +153,14 @@ def main():
     with tab5:
         query_gains_losses_analysis()
         
-    with tab6:
-        competitor_analysis()
+   # with tab6:
+    #    competitor_analysis()
         
-    with tab7:
-        traffic_attribution_analysis()
+   # with tab7:
+     #   traffic_attribution_analysis()
         
-    with tab_report:
-        comprehensive_report_tab()
+   # with tab_report:
+    #    comprehensive_report_tab()
     
 # Helper functions for file processing
 
