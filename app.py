@@ -1,48 +1,52 @@
 import sys
 import os
-# Fix architecture conflicts by prioritizing local and user packages
-# Remove broken system-wide site-packages from path
-system_site_packages = '/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages'
-if system_site_packages in sys.path:
-    sys.path.remove(system_site_packages)
+import platform
 
-# Add local packages directory first (contains arm64-compatible Pillow)
-local_packages = os.path.join(os.path.dirname(__file__), '.local_packages')
-if os.path.exists(local_packages):
-    sys.path.insert(0, local_packages)
+# Fix architecture conflicts by prioritizing local and user packages (macOS only)
+# This code is only needed on macOS with architecture conflicts, skip on Streamlit Cloud (Linux)
+if platform.system() == 'Darwin':  # macOS only
+    # Remove broken system-wide site-packages from path
+    system_site_packages = '/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages'
+    if system_site_packages in sys.path:
+        sys.path.remove(system_site_packages)
 
-# Then prioritize user site-packages
-user_site = None
-for path in sys.path:
-    if 'Users' in path and 'site-packages' in path:
-        user_site = path
-        break
-if user_site and user_site not in sys.path[:2]:
-    sys.path.insert(0, user_site)
-
-# CRITICAL: Import PIL BEFORE matplotlib tries to import it
-# This ensures matplotlib uses the correct arm64-compatible version from user site-packages
-# Remove any broken PIL from sys.modules
-for key in list(sys.modules.keys()):
-    if key.startswith('PIL'):
-        del sys.modules[key]
-
-# Import PIL now (will use user site-packages since system is removed from path)
-try:
-    from PIL import Image
-    # Cache it so matplotlib finds it
-    sys.modules['PIL'] = __import__('PIL')
-    sys.modules['PIL.Image'] = Image
-except ImportError:
-    # If that fails, try with local_packages
-    if os.path.exists(local_packages) and local_packages not in sys.path:
+    # Add local packages directory first (contains arm64-compatible Pillow)
+    local_packages = os.path.join(os.path.dirname(__file__), '.local_packages')
+    if os.path.exists(local_packages):
         sys.path.insert(0, local_packages)
-        try:
-            from PIL import Image
-            sys.modules['PIL'] = __import__('PIL')
-            sys.modules['PIL.Image'] = Image
-        except ImportError:
-            pass
+
+    # Then prioritize user site-packages
+    user_site = None
+    for path in sys.path:
+        if 'Users' in path and 'site-packages' in path:
+            user_site = path
+            break
+    if user_site and user_site not in sys.path[:2]:
+        sys.path.insert(0, user_site)
+
+    # CRITICAL: Import PIL BEFORE matplotlib tries to import it
+    # This ensures matplotlib uses the correct arm64-compatible version from user site-packages
+    # Remove any broken PIL from sys.modules
+    for key in list(sys.modules.keys()):
+        if key.startswith('PIL'):
+            del sys.modules[key]
+
+    # Import PIL now (will use user site-packages since system is removed from path)
+    try:
+        from PIL import Image
+        # Cache it so matplotlib finds it
+        sys.modules['PIL'] = __import__('PIL')
+        sys.modules['PIL.Image'] = Image
+    except ImportError:
+        # If that fails, try with local_packages
+        if os.path.exists(local_packages) and local_packages not in sys.path:
+            sys.path.insert(0, local_packages)
+            try:
+                from PIL import Image
+                sys.modules['PIL'] = __import__('PIL')
+                sys.modules['PIL.Image'] = Image
+            except ImportError:
+                pass
 
 import streamlit as st
 import pandas as pd
