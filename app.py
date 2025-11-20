@@ -1,3 +1,49 @@
+import sys
+import os
+# Fix architecture conflicts by prioritizing local and user packages
+# Remove broken system-wide site-packages from path
+system_site_packages = '/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/site-packages'
+if system_site_packages in sys.path:
+    sys.path.remove(system_site_packages)
+
+# Add local packages directory first (contains arm64-compatible Pillow)
+local_packages = os.path.join(os.path.dirname(__file__), '.local_packages')
+if os.path.exists(local_packages):
+    sys.path.insert(0, local_packages)
+
+# Then prioritize user site-packages
+user_site = None
+for path in sys.path:
+    if 'Users' in path and 'site-packages' in path:
+        user_site = path
+        break
+if user_site and user_site not in sys.path[:2]:
+    sys.path.insert(0, user_site)
+
+# CRITICAL: Import PIL BEFORE matplotlib tries to import it
+# This ensures matplotlib uses the correct arm64-compatible version from user site-packages
+# Remove any broken PIL from sys.modules
+for key in list(sys.modules.keys()):
+    if key.startswith('PIL'):
+        del sys.modules[key]
+
+# Import PIL now (will use user site-packages since system is removed from path)
+try:
+    from PIL import Image
+    # Cache it so matplotlib finds it
+    sys.modules['PIL'] = __import__('PIL')
+    sys.modules['PIL.Image'] = Image
+except ImportError:
+    # If that fails, try with local_packages
+    if os.path.exists(local_packages) and local_packages not in sys.path:
+        sys.path.insert(0, local_packages)
+        try:
+            from PIL import Image
+            sys.modules['PIL'] = __import__('PIL')
+            sys.modules['PIL.Image'] = Image
+        except ImportError:
+            pass
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -11,6 +57,7 @@ from docx import Document
 from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 import matplotlib.pyplot as plt
+from openai import OpenAI
 
 
 # Configure page
@@ -127,15 +174,13 @@ def main():
         """)
     
     # Enhanced tab navigation with more sections
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab_report = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "📋 Data Export Guide",
         "📊 Visibility Trends", 
         "🔄 Keyword Movement", 
         "📄 Page Performance",
         "🎯 Query Analysis",
-        "🏁 Competitor Gaps",
-        "📈 Traffic Attribution (Not Complete)",
-        "📝 Comprehensive Report" 
+        "🏁 Competitor Gaps"
     ])
     
     with tab1:
@@ -155,16 +200,27 @@ def main():
         
     with tab6:
         competitor_analysis()
-        
-   # with tab7:
-     #   traffic_attribution_analysis()
-        
-   # with tab_report:
-    #    comprehensive_report_tab()
     
 # Helper functions for file processing
 
 # ===================== REPORT HELPERS & BUILDER (PUT ABOVE comprehensive_report_tab) =====================
+
+@st.cache_data(show_spinner=False)
+def _load_df_cached(file_bytes, file_name, file_type):
+    """Cached file reading - converts uploaded file to bytes for caching"""
+    try:
+        if file_type == "csv":
+            df = pd.read_csv(io.BytesIO(file_bytes))
+        elif file_type in ["xlsx", "xls"]:
+            df = pd.read_excel(io.BytesIO(file_bytes))
+        else:
+            df = pd.read_csv(io.BytesIO(file_bytes))
+        # normalize columns
+        df.columns = [str(c).strip().lower().replace(" ", "_") for c in df.columns]
+        return df
+    except Exception as e:
+        st.error(f"Error reading file {file_name}: {str(e)}")
+        return None
 
 def _load_df(uploaded_file):
     """Read CSV/XLS/XLSX to DataFrame with normalized columns. Returns None if not provided/failed."""
@@ -172,18 +228,24 @@ def _load_df(uploaded_file):
         return None
     name = getattr(uploaded_file, "name", "").lower()
     try:
+        # Read file into memory for caching
+        uploaded_file.seek(0)
+        file_bytes = uploaded_file.read()
+        
+        # Determine file type
         if name.endswith(".csv"):
-            df = pd.read_csv(uploaded_file)
-        elif name.endswith(".xlsx") or name.endswith(".xls"):
-            df = pd.read_excel(uploaded_file)
+            file_type = "csv"
+        elif name.endswith(".xlsx"):
+            file_type = "xlsx"
+        elif name.endswith(".xls"):
+            file_type = "xls"
         else:
-            # try CSV fallback
-            uploaded_file.seek(0)
-            df = pd.read_csv(uploaded_file)
-        # normalize columns
-        df.columns = [str(c).strip().lower().replace(" ", "_") for c in df.columns]
-        return df
-    except Exception:
+            file_type = "csv"  # fallback
+        
+        # Use cached version
+        return _load_df_cached(file_bytes, name, file_type)
+    except Exception as e:
+        st.error(f"Error reading file {name}: {str(e)}")
         return None
 
 
@@ -453,13 +515,9 @@ def build_seo_audit_docx(
 # ===================== END REPORT HELPERS & BUILDER =====================
 
 def read_uploaded_file(uploaded_file):
-    """Read uploaded CSV or Excel file"""
+    """Read uploaded CSV or Excel file - uses cached version"""
     if uploaded_file is not None:
-        file_name = uploaded_file.name.lower()
-        if file_name.endswith('.xlsx') or file_name.endswith('.xls'):
-            return pd.read_excel(uploaded_file)
-        else:
-            return pd.read_csv(uploaded_file)
+        return _load_df(uploaded_file)
     return None
 
 def normalize_columns(df):
@@ -469,14 +527,55 @@ def normalize_columns(df):
     return df
 
 def find_column(columns, patterns):
-    """Find column by searching for patterns (case-insensitive)"""
-    columns_lower = {str(c).lower(): c for c in columns}
+    """Find column by searching for patterns (case-insensitive, handles normalized columns)"""
+    # Handle both normalized (lowercase with underscores) and original column names
+    columns_lower = {str(c).lower().replace(" ", "_").replace("-", "_"): c for c in columns}
+    columns_normalized = {str(c).lower().replace(" ", "_").replace("-", "_"): c for c in columns}
+    
+    # Combine both mappings
+    all_mappings = {**columns_lower, **columns_normalized}
+    
     for pattern in patterns:
-        pattern_lower = pattern.lower()
-        for col_lower, original_col in columns_lower.items():
-            if pattern_lower in col_lower:
+        pattern_normalized = pattern.lower().replace(" ", "_").replace("-", "_")
+        # Try exact match first
+        if pattern_normalized in all_mappings:
+            return all_mappings[pattern_normalized]
+        # Try substring match
+        for col_normalized, original_col in all_mappings.items():
+            if pattern_normalized in col_normalized or col_normalized in pattern_normalized:
                 return original_col
     return None
+
+def preview_columns(df, file_name="File"):
+    """Preview detected columns for user validation"""
+    if df is None or len(df.columns) == 0:
+        return None
+    
+    with st.expander(f"📋 Column Detection Preview - {file_name}", expanded=False):
+        st.markdown(f"**Detected {len(df.columns)} columns:**")
+        cols_display = pd.DataFrame({
+            'Column Name': df.columns,
+            'Sample Value': [str(df[col].iloc[0])[:50] if len(df) > 0 and pd.notna(df[col].iloc[0]) else 'N/A' for col in df.columns]
+        })
+        st.dataframe(cols_display, use_container_width=True, hide_index=True, height=200)
+        
+        # Show detected key columns
+        kw_col = find_column(df.columns, ['keyword', 'keywords', 'query', 'queries'])
+        pos_col = find_column(df.columns, ['position', 'pos', 'rank', 'ranking'])
+        if kw_col or pos_col:
+            st.success(f"✅ Key columns detected: Keyword={kw_col or 'Not found'}, Position={pos_col or 'Not found'}")
+        
+        return cols_display
+
+def ensure_standardized_columns(df):
+    """Ensure DataFrame has standardized column names for consistent processing across clients"""
+    if df is None:
+        return df
+    
+    df = df.copy()
+    # Normalize to lowercase with underscores (consistent with _load_df_cached)
+    df.columns = [str(c).strip().lower().replace(" ", "_").replace("-", "_") for c in df.columns]
+    return df
 
 def keyword_visibility_analysis():
     st.markdown('<div class="section-header">🔍 Keyword Visibility Trends (Year-over-Year)</div>', unsafe_allow_html=True)
@@ -583,14 +682,21 @@ def keyword_visibility_analysis():
             with st.spinner("🔄 Processing your data..."):
                 try:
                     # Load data using helper functions
-                    current_df = normalize_columns(read_uploaded_file(current_file))
-                    previous_df = normalize_columns(read_uploaded_file(previous_file))
+                    current_df = ensure_standardized_columns(read_uploaded_file(current_file))
+                    previous_df = ensure_standardized_columns(read_uploaded_file(previous_file))
+                    
+                    # Show column preview for user validation
+                    if current_df is not None:
+                        preview_columns(current_df, current_file.name if hasattr(current_file, 'name') else "Current File")
+                    if previous_df is not None:
+                        preview_columns(previous_df, previous_file.name if hasattr(previous_file, 'name') else "Previous File")
                     
                     # Validate data
                     validation_passed, validation_message = validate_positions_data(current_df, previous_df)
                     
                     if not validation_passed:
                         st.error(validation_message)
+                        st.info("💡 **Tip:** Column names are automatically detected. If detection fails, check the column preview above to see what columns were found.")
                         st.stop()
                     
                     # Perform analysis
@@ -609,50 +715,83 @@ def keyword_visibility_analysis():
             st.info("📤 Please upload the previous period Semrush Positions file")
 
 def validate_positions_data(current_df, previous_df):
-    """Validate the uploaded Semrush positions data"""
-    required_columns = ['Keyword', 'Position']
+    """Validate the uploaded Semrush positions data with flexible column detection"""
     
-    # Check if required columns exist
+    # Use find_column for flexible detection (works with normalized columns)
     for df, period in [(current_df, 'current'), (previous_df, 'previous')]:
-        missing_columns = [col for col in required_columns if col not in df.columns]
+        # Check for keyword column (handles various naming)
+        kw_col = find_column(df.columns, ['keyword', 'keywords', 'query', 'queries'])
+        pos_col = find_column(df.columns, ['position', 'pos', 'rank', 'ranking'])
+        
+        missing_columns = []
+        if not kw_col:
+            missing_columns.append('Keyword/Query')
+        if not pos_col:
+            missing_columns.append('Position/Rank')
+        
         if missing_columns:
-            return False, f"❌ Missing required columns in {period} file: {missing_columns}. Available columns: {list(df.columns)}"
+            available = ", ".join(list(df.columns)[:15])
+            return False, f"❌ Missing required columns in {period} file: {missing_columns}. Available columns: {available}..."
     
     # Check if data is not empty
     if len(current_df) == 0 or len(previous_df) == 0:
         return False, "❌ One or both files appear to be empty"
     
-    # Check for valid position data
+    # Check for valid position data using detected column
     for df, period in [(current_df, 'current'), (previous_df, 'previous')]:
-        if df['Position'].isna().all():
+        pos_col = find_column(df.columns, ['position', 'pos', 'rank', 'ranking'])
+        if pos_col and df[pos_col].isna().all():
             return False, f"❌ No valid position data found in {period} file"
     
-    return True, "✅ Data validation passed"
+    return True, "✅ Data validation passed - columns detected successfully"
 
-def analyze_keyword_visibility(current_df, previous_df):
-    """Analyze keyword visibility trends"""
+@st.cache_data(show_spinner=False)
+def _analyze_keyword_visibility_cached(current_df_hash, previous_df_hash, current_df, previous_df):
+    """Cached analysis function - uses DataFrame hash for cache key"""
+    # Detect column names dynamically
+    pos_col_current = find_column(current_df.columns, ['position', 'pos', 'rank', 'ranking']) or 'position'
+    pos_col_prev = find_column(previous_df.columns, ['position', 'pos', 'rank', 'ranking']) or 'position'
     
-    # Clean position data - convert to numeric, handle non-numeric values
-    def clean_positions(df):
+    # Clean position data - convert to numeric, handle non-numeric values (vectorized)
+    def clean_positions(df, pos_col):
         df = df.copy()
-        df['Position'] = pd.to_numeric(df['Position'], errors='coerce')
-        df = df.dropna(subset=['Position'])
+        # Find position column (handles normalized column names)
+        if pos_col not in df.columns:
+            pos_col = find_column(df.columns, ['position', 'pos', 'rank', 'ranking']) or 'position'
+        # Use lowercase normalized name
+        pos_col_normalized = pos_col.lower().replace(" ", "_").replace("-", "_")
+        if pos_col_normalized in df.columns:
+            pos_col = pos_col_normalized
+        elif pos_col in df.columns:
+            pass  # Use as-is
+        else:
+            # Try to find any position-like column
+            pos_col = find_column(df.columns, ['position', 'pos', 'rank', 'ranking']) or 'position'
+        
+        if pos_col in df.columns:
+            df['position'] = pd.to_numeric(df[pos_col], errors='coerce')
+            df = df.dropna(subset=['position'])
         return df
     
-    current_clean = clean_positions(current_df)
-    previous_clean = clean_positions(previous_df)
+    current_clean = clean_positions(current_df, pos_col_current)
+    previous_clean = clean_positions(previous_df, pos_col_prev)
     
     # Calculate total keywords
     total_current = len(current_clean)
     total_previous = len(previous_clean)
     
-    # Calculate rank buckets
+    # Calculate rank buckets using vectorized operations
     def get_rank_buckets(df):
+        # Use normalized column name
+        pos_col = 'position' if 'position' in df.columns else find_column(df.columns, ['position', 'pos', 'rank', 'ranking']) or 'position'
+        if pos_col not in df.columns:
+            return {'top_3': 0, 'top_4_10': 0, 'top_11_20': 0, 'top_21_plus': 0}
+        pos = df[pos_col]
         return {
-            'top_3': len(df[df['Position'] <= 3]),
-            'top_4_10': len(df[(df['Position'] > 3) & (df['Position'] <= 10)]),
-            'top_11_20': len(df[(df['Position'] > 10) & (df['Position'] <= 20)]),
-            'top_21_plus': len(df[df['Position'] > 20])
+            'top_3': (pos <= 3).sum(),
+            'top_4_10': ((pos > 3) & (pos <= 10)).sum(),
+            'top_11_20': ((pos > 10) & (pos <= 20)).sum(),
+            'top_21_plus': (pos > 20).sum()
         }
     
     current_buckets = get_rank_buckets(current_clean)
@@ -689,6 +828,14 @@ def analyze_keyword_visibility(current_df, previous_df):
         'previous_df': previous_clean
     }
 
+def analyze_keyword_visibility(current_df, previous_df):
+    """Analyze keyword visibility trends - uses cached version"""
+    # Create hash for caching (using shape and first few rows)
+    current_hash = hash((current_df.shape, tuple(current_df.head(5).values.flatten()) if len(current_df) > 0 else ()))
+    previous_hash = hash((previous_df.shape, tuple(previous_df.head(5).values.flatten()) if len(previous_df) > 0 else ()))
+    
+    return _analyze_keyword_visibility_cached(current_hash, previous_hash, current_df, previous_df)
+
 def display_visibility_results(results):
     """Display the keyword visibility analysis results"""
     
@@ -699,32 +846,39 @@ def display_visibility_results(results):
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        delta_color = "normal" if results['total_change'] >= 0 else "inverse"
+        # For keywords: negative change is bad (red), positive is good (green)
+        # Streamlit's "normal" mode: positive = green, negative = red (correct for this metric)
         st.metric(
             label="Total Keywords",
             value=f"{results['total_current']:,}",
             delta=f"{results['total_change']:,} ({results['total_change_pct']:.1f}%)",
-            delta_color=delta_color
+            delta_color="normal"  # Always normal: negative changes show red (bad), positive show green (good)
         )
     
     with col2:
         top_3_current = results['bucket_changes']['top_3']['current_share']
         top_3_previous = results['bucket_changes']['top_3']['previous_share']
         top_3_delta = top_3_current - top_3_previous
+        # For rankings: positive change is good (green), negative is bad (red)
+        # Streamlit's "normal" mode handles this correctly: positive = green, negative = red
         st.metric(
             label="Top 3 Rankings",
             value=f"{top_3_current:.1f}%",
-            delta=f"{top_3_delta:+.1f}%"
+            delta=f"{top_3_delta:+.1f}%",
+            delta_color="normal"  # Always normal: positive = green (good), negative = red (bad)
         )
     
     with col3:
         top_10_current = results['bucket_changes']['top_3']['current_share'] + results['bucket_changes']['top_4_10']['current_share']
         top_10_previous = results['bucket_changes']['top_3']['previous_share'] + results['bucket_changes']['top_4_10']['previous_share']
         top_10_delta = top_10_current - top_10_previous
+        # For rankings: positive change is good (green), negative is bad (red)
+        # Streamlit's "normal" mode handles this correctly: positive = green, negative = red
         st.metric(
             label="Top 10 Rankings",
             value=f"{top_10_current:.1f}%",
-            delta=f"{top_10_delta:+.1f}%"
+            delta=f"{top_10_delta:+.1f}%",
+            delta_color="normal"  # Always normal: positive = green (good), negative = red (bad)
         )
     
     with col4:
@@ -747,11 +901,13 @@ def display_visibility_results(results):
             results['total_previous']
         )
         quality_delta = current_quality - previous_quality
-        
+        # For quality score: positive change is good (green), negative is bad (red)
+        # Streamlit's "normal" mode handles this correctly: positive = green, negative = red
         st.metric(
             label="Quality Score",
             value=f"{current_quality:.1f}",
             delta=f"{quality_delta:+.1f}",
+            delta_color="normal",  # Always normal: positive = green (good), negative = red (bad)
             help="Weighted score: Top 3=100pts, 4-10=75pts, 11-20=50pts, 21+=25pts"
         )
     
@@ -853,11 +1009,15 @@ def display_visibility_results(results):
     table_df = pd.DataFrame(table_data)
     st.dataframe(table_df, use_container_width=True)
     
-    # Strategic insights
+    # Strategic insights - AI-powered
     st.markdown('<div class="section-header">💡 Strategic Insights & Interpretation</div>', unsafe_allow_html=True)
     
-    insights = generate_visibility_insights(results)
-    st.markdown(f'<div class="insight-box">{insights}</div>', unsafe_allow_html=True)
+    st.info("💡 **AI-Powered Insights:** Strategic insights are generated using AI. Set your OpenAI API key as an environment variable `OPENAI_API_KEY` or in Streamlit secrets.")
+    
+    with st.spinner("🤖 Generating AI-powered strategic insights..."):
+        analysis_summary = create_visibility_analysis_summary(results)
+        insights = generate_chatgpt_insights(analysis_summary, "visibility")
+        st.markdown(f'<div class="insight-box">{insights.replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
     
     # Download section
     st.markdown('<div class="section-header">📥 Download Results</div>', unsafe_allow_html=True)
@@ -886,46 +1046,170 @@ def display_visibility_results(results):
         )
 
 def generate_visibility_insights(results):
-    """Generate strategic insights based on the visibility analysis"""
+    """Generate strategic, actionable insights based on the visibility analysis"""
     
     total_change = results['total_change']
     total_change_pct = results['total_change_pct']
     
     top_3_change = results['bucket_changes']['top_3']['change_pct']
-    top_10_current_share = (results['bucket_changes']['top_3']['current_share'] + 
-                           results['bucket_changes']['top_4_10']['current_share'])
+    top_3_current = results['bucket_changes']['top_3']['current_share']
+    top_4_10_current = results['bucket_changes']['top_4_10']['current_share']
+    top_10_current_share = top_3_current + top_4_10_current
     top_10_previous_share = (results['bucket_changes']['top_3']['previous_share'] + 
                             results['bucket_changes']['top_4_10']['previous_share'])
+    top_21_plus_share = results['bucket_changes']['top_21_plus']['current_share']
     
     insights = []
+    priority_actions = []
     
-    # Overall trend analysis
-    if total_change > 0:
-        insights.append(f"<b>🟢 Keyword Footprint Growth:</b> You're ranking for {abs(total_change):,} more keywords ({total_change_pct:+.1f}%), indicating expanding organic visibility.")
+    # Overall trend analysis with actionable context
+    if total_change > 100:
+        insights.append(f"<b>🟢 Strong Keyword Expansion:</b> You've gained {abs(total_change):,} new keyword rankings ({total_change_pct:+.1f}%), indicating successful content expansion and improved domain authority.")
+        priority_actions.append("Identify which content types/keywords drove this growth and double down on those strategies")
+    elif total_change > 0:
+        insights.append(f"<b>🟢 Moderate Growth:</b> You're ranking for {abs(total_change):,} more keywords ({total_change_pct:+.1f}%). This steady growth suggests sustainable SEO progress.")
+    elif total_change < -100:
+        insights.append(f"<b>🔴 Significant Keyword Loss:</b> You've lost rankings for {abs(total_change):,} keywords ({total_change_pct:.1f}%). This may indicate technical issues, content quality decline, or increased competition.")
+        priority_actions.append("Audit lost keywords to identify patterns - check for technical SEO issues, content updates needed, or competitive displacement")
     elif total_change < 0:
-        insights.append(f"<b>🟡 Keyword Footprint Decline:</b> You've lost rankings for {abs(total_change):,} keywords ({total_change_pct:.1f}%), but this could signal a focus on quality over quantity.")
+        insights.append(f"<b>🟡 Minor Decline:</b> Lost {abs(total_change):,} keyword rankings ({total_change_pct:.1f}%). Monitor closely - could be seasonal or competitive shifts.")
     else:
-        insights.append("<b>🟨 Stable Keyword Count:</b> Your total keyword footprint remained stable year-over-year.")
+        insights.append("<b>🟨 Stable Footprint:</b> Keyword count remained stable. Focus on improving positions rather than expanding breadth.")
     
-    # Quality analysis
-    if top_3_change > 10:
-        insights.append(f"<b>🟢 Strong Authority Growth:</b> Top 3 rankings increased by {top_3_change:.1f}%, showing significant improvement in search authority.")
+    # Quality analysis with specific recommendations
+    if top_3_change > 15:
+        insights.append(f"<b>🟢 Exceptional Authority Growth:</b> Top 3 rankings increased by {top_3_change:.1f}% (now {top_3_current:.1f}% of total). This indicates strong content quality and E-E-A-T signals.")
+        priority_actions.append("Analyze top 3 keywords to identify content patterns and replicate success across similar topics")
+    elif top_3_change > 5:
+        insights.append(f"<b>🟢 Strong Quality Improvement:</b> Top 3 rankings improved by {top_3_change:.1f}% (now {top_3_current:.1f}% of total). Your content relevance and authority are strengthening.")
     elif top_3_change > 0:
-        insights.append(f"<b>🟢 Positive Quality Trend:</b> Top 3 rankings improved by {top_3_change:.1f}%, indicating better content relevance.")
-    elif top_3_change < -10:
-        insights.append(f"<b>🔴 Authority Concern:</b> Top 3 rankings declined by {abs(top_3_change):.1f}%, suggesting competitive pressure or content issues.")
+        insights.append(f"<b>🟢 Positive Momentum:</b> Top 3 rankings increased by {top_3_change:.1f}% (now {top_3_current:.1f}% of total). Continue focusing on high-intent, conversion-focused keywords.")
+    elif top_3_change < -15:
+        insights.append(f"<b>🔴 Critical Authority Decline:</b> Top 3 rankings dropped by {abs(top_3_change):.1f}% (now {top_3_current:.1f}% of total). This suggests serious competitive pressure or content quality issues.")
+        priority_actions.append("URGENT: Review top 3 lost keywords - check for content freshness, backlink loss, or algorithm updates affecting these terms")
+    elif top_3_change < -5:
+        insights.append(f"<b>🔴 Authority Concern:</b> Top 3 rankings declined by {abs(top_3_change):.1f}% (now {top_3_current:.1f}% of total). Investigate content updates, competitor activity, and technical SEO.")
+        priority_actions.append("Review pages that lost top 3 positions - update content, improve internal linking, and check for technical issues")
     
-    # Strategic recommendation
-    if total_change < 0 and top_10_current_share > top_10_previous_share:
-        insights.append("<b>🎯 Quality Focus Strategy:</b> Although you're ranking for fewer total keywords, the higher concentration of top 10 positions suggests a successful focus on high-value terms.")
-    elif total_change > 0 and top_10_current_share < top_10_previous_share:
-        insights.append("<b>⚠️ Breadth vs Depth Trade-off:</b> You're ranking for more keywords but with lower average positions. Consider consolidating efforts on your best-performing content.")
+    # Strategic positioning analysis
+    if total_change < 0 and top_10_current_share > top_10_previous_share + 5:
+        insights.append(f"<b>🎯 Quality Over Quantity Success:</b> Despite losing {abs(total_change):,} total keywords, your top 10 share increased from {top_10_previous_share:.1f}% to {top_10_current_share:.1f}%. This indicates successful focus on high-value terms.")
+        priority_actions.append("Continue this quality-focused strategy - prioritize ranking improvements over keyword expansion")
+    elif total_change > 0 and top_10_current_share < top_10_previous_share - 5:
+        insights.append(f"<b>⚠️ Breadth vs Depth Trade-off:</b> You gained {total_change:,} keywords but top 10 share dropped from {top_10_previous_share:.1f}% to {top_10_current_share:.1f}%. Consider consolidating efforts on improving positions for existing keywords.")
+        priority_actions.append("Focus on improving positions for current rankings rather than expanding to new keywords - prioritize top 20 keywords for optimization")
     
-    # Next steps
-    if results['bucket_changes']['top_21_plus']['current_share'] > 40:
-        insights.append("<b>🎯 Optimization Opportunity:</b> Over 40% of your keywords rank beyond position 20. Focus on improving on-page SEO and building topic authority.")
+    # Deep-dive opportunities
+    if top_21_plus_share > 50:
+        insights.append(f"<b>🎯 Major Optimization Opportunity:</b> {top_21_plus_share:.1f}% of keywords rank beyond position 20. These represent significant untapped potential - even moving to position 10 could drive substantial traffic.")
+        priority_actions.append(f"Create optimization plan for top {int(results['total_current'] * 0.2):,} keywords ranking 21-50 - focus on on-page SEO, content enhancement, and internal linking")
+    elif top_21_plus_share > 40:
+        insights.append(f"<b>🎯 Optimization Opportunity:</b> {top_21_plus_share:.1f}% of keywords rank beyond position 20. Focus on improving on-page SEO, building topic authority, and enhancing content depth for these terms.")
+        priority_actions.append("Identify keywords ranking 21-30 with high search volume and optimize those pages for quick wins")
+    
+    # Competitive positioning
+    if top_10_current_share < 30:
+        insights.append(f"<b>⚠️ Low Top 10 Concentration:</b> Only {top_10_current_share:.1f}% of keywords are in top 10. This suggests you're spread thin across many keywords. Consider focusing on fewer, higher-value terms.")
+        priority_actions.append("Audit keyword portfolio - identify 50-100 highest-value keywords and prioritize optimization efforts on those")
+    
+    # Build final insights with priority actions
+    if priority_actions:
+        insights.append(f"<b>📋 Priority Actions:</b><ul>{''.join([f'<li>{action}</li>' for action in priority_actions[:3]])}</ul>")
     
     return "<br><br>".join(insights)
+
+def create_visibility_summary_report(results):
+    """Create downloadable visibility analysis report"""
+    
+    report = f"""
+KEYWORD VISIBILITY ANALYSIS REPORT
+Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+===========================================
+EXECUTIVE SUMMARY
+===========================================
+
+Total Keywords (Current): {results['total_current']:,}
+Total Keywords (Previous): {results['total_previous']:,}
+Net Change: {results['total_change']:,} ({results['total_change_pct']:+.1f}%)
+
+===========================================
+RANKING DISTRIBUTION ANALYSIS
+===========================================
+
+Current Period Distribution:
+"""
+    
+    for bucket, data in results['bucket_changes'].items():
+        report += f"• {bucket.replace('_', ' ').title()}: {data['current']:,} keywords ({data['current_share']:.1f}%)\n"
+    
+    report += f"""
+
+Previous Period Distribution:
+"""
+    
+    for bucket, data in results['bucket_changes'].items():
+        report += f"• {bucket.replace('_', ' ').title()}: {data['previous']:,} keywords ({data['previous_share']:.1f}%)\n"
+    
+    report += f"""
+
+Changes by Bucket:
+"""
+    
+    for bucket, data in results['bucket_changes'].items():
+        change = data['change']
+        change_pct = data['change_pct']
+        report += f"• {bucket.replace('_', ' ').title()}: {change:+,} ({change_pct:+.1f}%)\n"
+    
+    report += f"""
+
+===========================================
+STRATEGIC INSIGHTS
+===========================================
+
+{generate_visibility_insights(results).replace('<b>', '').replace('</b>', '').replace('<br><br>', '\n\n').replace('🟢', '• ').replace('🟡', '• ').replace('🔴', '• ').replace('🎯', '• ').replace('⚠️', '• ').replace('🔧', '• ')}
+
+===========================================
+"""
+    
+    return report
+
+def analyze_performance_pattern(clicks_delta, impr_delta, ctr_delta_pp, sessions_delta=None):
+    """Analyze performance pattern from metrics changes"""
+    
+    pattern = {
+        'description': '',
+        'detail': '',
+        'severity': 'neutral'
+    }
+    
+    # Determine pattern based on metric changes
+    if clicks_delta > 0 and impr_delta > 0 and ctr_delta_pp > 0:
+        pattern['description'] = "Strong Growth Pattern"
+        pattern['detail'] = "All key metrics are improving: clicks, impressions, and CTR are all up. This indicates successful SEO efforts with both visibility and engagement gains."
+        pattern['severity'] = 'positive'
+    elif clicks_delta > 0 and impr_delta > 0 and ctr_delta_pp < 0:
+        pattern['description'] = "Visibility Growth, CTR Decline"
+        pattern['detail'] = "Clicks and impressions are up, but CTR is down. This suggests increased visibility but potential issues with result relevance or SERP feature competition."
+        pattern['severity'] = 'warning'
+    elif clicks_delta < 0 and impr_delta < 0 and ctr_delta_pp < 0:
+        pattern['description'] = "Declining Performance"
+        pattern['detail'] = "All metrics are declining. This indicates a need for immediate attention to content quality, technical SEO, or competitive positioning."
+        pattern['severity'] = 'negative'
+    elif clicks_delta > 0 and impr_delta < 0:
+        pattern['description'] = "Efficiency Improvement"
+        pattern['detail'] = "Clicks are up despite fewer impressions, indicating better targeting and relevance. CTR improvement is driving results."
+        pattern['severity'] = 'positive'
+    elif clicks_delta < 0 and impr_delta > 0:
+        pattern['description'] = "Visibility Up, Engagement Down"
+        pattern['detail'] = "More impressions but fewer clicks suggests ranking for less relevant queries or increased SERP feature competition."
+        pattern['severity'] = 'warning'
+    else:
+        pattern['description'] = "Mixed Performance"
+        pattern['detail'] = "Metrics show mixed signals. Review individual query and page performance to identify specific opportunities."
+        pattern['severity'] = 'neutral'
+    
+    return pattern
 
 def data_export_instructions():
     """Comprehensive guide for exporting data from various SEO tools"""
@@ -1428,11 +1712,13 @@ def display_movement_results(results):
         )
     
     with col3:
+        # For declined rankings: negative is bad, should show red
+        # Using "normal" so negative delta shows as red (bad)
         st.metric(
             label="Declined Rankings", 
             value=f"{results['movement_counts']['declined']:,}",
             delta=f"-{results['movement_counts']['declined']:,} keywords",
-            delta_color="inverse"
+            delta_color="normal"  # Normal mode: negative = red (bad), positive = green (good)
         )
     
     with col4:
@@ -1560,10 +1846,15 @@ def display_movement_results(results):
         })
         st.dataframe(sources_df, use_container_width=True, hide_index=True)
     
-    # Strategic insights
+    # Strategic insights - AI-powered
     st.markdown('<div class="section-header">💡 Strategic Insights</div>', unsafe_allow_html=True)
-    insights = generate_movement_insights(results)
-    st.markdown(f'<div class="insight-box">{insights}</div>', unsafe_allow_html=True)
+    
+    st.info("💡 **AI-Powered Insights:** Strategic insights are generated using AI. Set your OpenAI API key as an environment variable `OPENAI_API_KEY` or in Streamlit secrets.")
+    
+    with st.spinner("🤖 Generating AI-powered strategic insights..."):
+        analysis_summary = create_movement_analysis_summary(results)
+        insights = generate_chatgpt_insights(analysis_summary, "movement")
+        st.markdown(f'<div class="insight-box">{insights.replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
     
     # Download section
     st.markdown('<div class="section-header">📥 Download Results</div>', unsafe_allow_html=True)
@@ -2035,7 +2326,7 @@ def analyze_gsc_page_performance(pages_df, countries_df):
     
     # Countries analysis
     countries_analysis = None
-    if not countries_df.empty:
+    if countries_df is not None and not countries_df.empty:
         try:
             countries_analysis = analyze_countries_data(countries_df)
         except:
@@ -2125,17 +2416,20 @@ def display_gsc_results(results):
     
     with clicks_tab:
         st.markdown("**Pages with highest current click volume**")
-        display_cols = ['Page', 'Clicks_Now', 'Impr_Now', 'CTR_Now']
-        if 'Position' in results['top_pages_by_clicks'].columns:
-            display_cols.append('Position')
-        
-        display_df = results['top_pages_by_clicks'][display_cols].copy()
-        display_df.columns = ['Page', 'Clicks', 'Impressions', 'CTR %'] + (['Avg Position'] if len(display_cols) > 4 else [])
-        st.dataframe(display_df, use_container_width=True, hide_index=True, height=400)
+        if results.get('top_pages_by_clicks') is not None and not results['top_pages_by_clicks'].empty:
+            display_cols = ['Page', 'Clicks_Now', 'Impr_Now', 'CTR_Now']
+            if 'Position' in results['top_pages_by_clicks'].columns:
+                display_cols.append('Position')
+            
+            display_df = results['top_pages_by_clicks'][display_cols].copy()
+            display_df.columns = ['Page', 'Clicks', 'Impressions', 'CTR %'] + (['Avg Position'] if len(display_cols) > 4 else [])
+            st.dataframe(display_df, use_container_width=True, hide_index=True, height=400)
+        else:
+            st.info("No click data available")
     
     with ctr_tab:
         st.markdown("**Pages with highest click-through rates**")
-        if not results['top_ctr_pages'].empty:
+        if results.get('top_ctr_pages') is not None and not results['top_ctr_pages'].empty:
             display_cols = ['Page', 'Clicks_Now', 'CTR_Now']
             if 'Position' in results['top_ctr_pages'].columns:
                 display_cols.append('Position')
@@ -2148,17 +2442,23 @@ def display_gsc_results(results):
     
     with gainers_tab:
         st.markdown("**Pages with biggest click increases**")
-        display_cols = ['Page', 'Clicks_Prev', 'Clicks_Now', 'Clicks_Delta', 'Clicks_Pct_Change']
-        display_df = results['biggest_gainers'][display_cols].copy()
-        display_df.columns = ['Page', 'Previous Clicks', 'Current Clicks', 'Clicks Δ', 'Change %']
-        st.dataframe(display_df, use_container_width=True, hide_index=True, height=400)
+        if results.get('biggest_gainers') is not None and not results['biggest_gainers'].empty:
+            display_cols = ['Page', 'Clicks_Prev', 'Clicks_Now', 'Clicks_Delta', 'Clicks_Pct_Change']
+            display_df = results['biggest_gainers'][display_cols].copy()
+            display_df.columns = ['Page', 'Previous Clicks', 'Current Clicks', 'Clicks Δ', 'Change %']
+            st.dataframe(display_df, use_container_width=True, hide_index=True, height=400)
+        else:
+            st.info("No gainers data available")
     
     with losers_tab:
         st.markdown("**Pages with biggest click decreases**")
-        display_cols = ['Page', 'Clicks_Prev', 'Clicks_Now', 'Clicks_Delta', 'Clicks_Pct_Change']
-        display_df = results['biggest_losers'][display_cols].copy()
-        display_df.columns = ['Page', 'Previous Clicks', 'Current Clicks', 'Clicks Δ', 'Change %']
-        st.dataframe(display_df, use_container_width=True, hide_index=True, height=400)
+        if results.get('biggest_losers') is not None and not results['biggest_losers'].empty:
+            display_cols = ['Page', 'Clicks_Prev', 'Clicks_Now', 'Clicks_Delta', 'Clicks_Pct_Change']
+            display_df = results['biggest_losers'][display_cols].copy()
+            display_df.columns = ['Page', 'Previous Clicks', 'Current Clicks', 'Clicks Δ', 'Change %']
+            st.dataframe(display_df, use_container_width=True, hide_index=True, height=400)
+        else:
+            st.info("No losers data available")
     
     # Countries Map (if available)
     if results['countries_analysis'] is not None and not results['countries_analysis'].empty:
@@ -2757,10 +3057,15 @@ def display_pages_results(results):
         longtail_display.columns = ['URL', 'Traffic', 'Keywords', 'TPK']
         st.dataframe(longtail_display, use_container_width=True, hide_index=True, height=400)
     
-    # Strategic insights
+    # Strategic insights - AI-powered
     st.markdown('<div class="section-header">💡 Strategic Insights</div>', unsafe_allow_html=True)
-    insights = generate_pages_insights(results)
-    st.markdown(f'<div class="insight-box">{insights}</div>', unsafe_allow_html=True)
+    
+    st.info("💡 **AI-Powered Insights:** Strategic insights are generated using AI. Set your OpenAI API key as an environment variable `OPENAI_API_KEY` or in Streamlit secrets.")
+    
+    with st.spinner("🤖 Generating AI-powered strategic insights..."):
+        analysis_summary = create_pages_analysis_summary(results)
+        insights = generate_chatgpt_insights(analysis_summary, "pages")
+        st.markdown(f'<div class="insight-box">{insights.replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
     
     # Download section
     st.markdown('<div class="section-header">📥 Download Results</div>', unsafe_allow_html=True)
@@ -3044,8 +3349,20 @@ def query_gains_losses_analysis():
                     display_query_results(query_results)
                     
                 except Exception as e:
-                    st.error(f"❌ Error processing files: {str(e)}")
+                    error_msg = str(e) if e and str(e) != "None" and str(e).strip() else "Unknown error occurred during file processing"
+                    st.error(f"❌ Error processing files: {error_msg}")
                     st.info("💡 Please ensure you've uploaded valid GSC Queries Compare file")
+                    # Show column preview for debugging
+                    try:
+                        if 'gsc_df' in locals() and gsc_df is not None:
+                            with st.expander("🔍 Debug: Detected Columns"):
+                                st.write(f"Columns found: {', '.join(list(gsc_df.columns)[:15])}")
+                    except:
+                        pass
+                    # Show detailed error in expander
+                    with st.expander("🔍 Show Detailed Error"):
+                        import traceback
+                        st.code(traceback.format_exc(), language='python')
     else:
         st.info("📤 Please upload a GSC Queries Compare file to begin analysis")
 
@@ -3081,28 +3398,52 @@ def validate_query_data(df):
 def analyze_query_performance(gsc_df, semrush_df=None):
     """Analyze query performance following the prototype methodology"""
     
-    # Find columns with flexible matching
+    # Find columns with flexible matching (handles normalized column names)
     def pick_column(columns, must_include=None, any_of=None):
-        must_include = [t.lower() for t in (must_include or [])]
-        any_of = [t.lower() for t in (any_of or [])]
+        must_include = [t.lower().replace(" ", "_") for t in (must_include or [])]
+        any_of = [t.lower().replace(" ", "_") for t in (any_of or [])]
         for c in columns:
-            lc = c.lower()
+            # Normalize column name for comparison (handle both original and normalized)
+            lc = str(c).lower().replace(" ", "_").replace("-", "_")
             if all(t in lc for t in must_include) and (not any_of or any(t in lc for t in any_of)):
                 return c
         return None
     
     cols = list(gsc_df.columns)
     
-    # Find GSC columns
-    query_col = find_column(cols, ['top queries', 'query'])
-    clicks_now = pick_column(cols, must_include=['click'], any_of=['last 3', 'current', 'now']) or \
-                pick_column(cols, must_include=['last 3 months'], any_of=['click'])
-    clicks_prev = pick_column(cols, must_include=['click'], any_of=['previous', 'prev', 'same period']) or \
-                 pick_column(cols, must_include=['previous 3 months'], any_of=['click'])
-    impr_now = pick_column(cols, must_include=['impression'], any_of=['last 3', 'current', 'now']) or \
-               pick_column(cols, must_include=['last 3 months'], any_of=['impression'])
-    impr_prev = pick_column(cols, must_include=['impression'], any_of=['previous', 'prev', 'same period']) or \
-                pick_column(cols, must_include=['previous 3 months'], any_of=['impression'])
+    # Find GSC columns - try multiple patterns to handle various naming conventions
+    query_col = find_column(cols, ['top_queries', 'top queries', 'query', 'queries'])
+    
+    # Try various patterns for clicks columns (handles normalized names like last_3_months_clicks)
+    clicks_now = (find_column(cols, ['last_3_months_clicks', 'last 3 months clicks', 'last_3_months', 'current_clicks', 'clicks_now', 'clicks_current']) or
+                  pick_column(cols, must_include=['click'], any_of=['last_3', 'last3', 'current', 'now']) or
+                  pick_column(cols, must_include=['last', '3', 'month'], any_of=['click']))
+    
+    clicks_prev = (find_column(cols, ['same_period_last_year_clicks', 'same period last year clicks', 'previous_3_months_clicks', 'previous 3 months clicks', 'clicks_prev', 'clicks_previous']) or
+                   pick_column(cols, must_include=['click'], any_of=['previous', 'prev', 'same_period', 'sameperiod', 'last_year']) or
+                   pick_column(cols, must_include=['previous', '3', 'month'], any_of=['click']))
+    
+    # Try various patterns for impressions columns
+    impr_now = (find_column(cols, ['last_3_months_impressions', 'last 3 months impressions', 'impressions_now', 'impressions_current']) or
+                pick_column(cols, must_include=['impression'], any_of=['last_3', 'last3', 'current', 'now']) or
+                pick_column(cols, must_include=['last', '3', 'month'], any_of=['impression']))
+    
+    impr_prev = (find_column(cols, ['same_period_last_year_impressions', 'same period last year impressions', 'previous_3_months_impressions', 'previous 3 months impressions', 'impressions_prev']) or
+                 pick_column(cols, must_include=['impression'], any_of=['previous', 'prev', 'same_period', 'sameperiod', 'last_year']) or
+                 pick_column(cols, must_include=['previous', '3', 'month'], any_of=['impression']))
+    
+    # Validate required columns
+    missing_cols = []
+    if not query_col:
+        missing_cols.append('Query/Top Queries')
+    if not clicks_now:
+        missing_cols.append('Current Period Clicks (Last 3 months clicks)')
+    if not clicks_prev:
+        missing_cols.append('Previous Period Clicks (Previous 3 months clicks or Same period last year clicks)')
+    
+    if missing_cols:
+        available = ", ".join(cols[:15])
+        raise ValueError(f"Missing required columns: {missing_cols}. Available columns: {available}...")
     
     # Build working dataframe
     work_df = pd.DataFrame()
@@ -3175,14 +3516,24 @@ def analyze_query_performance(gsc_df, semrush_df=None):
     total_impr_now = agg_df['Impr_Now'].sum() 
     total_impr_prev = agg_df['Impr_Prev'].sum()
     
+    # Calculate CTR delta
+    ctr_now = (total_clicks_now / total_impr_now * 100) if total_impr_now > 0 else np.nan
+    ctr_prev = (total_clicks_prev / total_impr_prev * 100) if total_impr_prev > 0 else np.nan
+    ctr_delta_pp = (ctr_now - ctr_prev) if not pd.isna(ctr_now) and not pd.isna(ctr_prev) else np.nan
+    
     return {
         'total_queries': len(agg_df),
+        'total_clicks_now': total_clicks_now,  # Add current total for display
+        'total_clicks_prev': total_clicks_prev,  # Add previous total
         'total_clicks_delta': total_clicks_now - total_clicks_prev,
         'total_clicks_pct_change': ((total_clicks_now - total_clicks_prev) / total_clicks_prev * 100) if total_clicks_prev > 0 else 0,
+        'total_impr_now': total_impr_now,  # Add current impressions
+        'total_impr_prev': total_impr_prev,  # Add previous impressions
         'total_impr_delta': total_impr_now - total_impr_prev,
         'total_impr_pct_change': ((total_impr_now - total_impr_prev) / total_impr_prev * 100) if total_impr_prev > 0 else 0,
-        'weighted_ctr_now': (total_clicks_now / total_impr_now * 100) if total_impr_now > 0 else np.nan,
-        'weighted_ctr_prev': (total_clicks_prev / total_impr_prev * 100) if total_impr_prev > 0 else np.nan,
+        'weighted_ctr_now': ctr_now,
+        'weighted_ctr_prev': ctr_prev,
+        'ctr_delta_pp': ctr_delta_pp,  # Add CTR delta in percentage points
         'top_winners': top_winners,
         'top_losers': top_losers, 
         'ctr_pressure': ctr_pressure.head(25),
@@ -3206,21 +3557,23 @@ def display_query_results(results):
         )
     
     with col2:
-        delta_color = "normal" if results['total_clicks_delta'] >= 0 else "inverse"
+        # For clicks: positive change is good (green), negative is bad (red)
+        # Streamlit's "normal" mode handles this correctly: positive = green, negative = red
         st.metric(
             label="Total Clicks Change",
             value=f"{results['total_clicks_delta']:,}",
             delta=f"{results['total_clicks_pct_change']:+.1f}%",
-            delta_color=delta_color
+            delta_color="normal"  # Always normal: positive = green (good), negative = red (bad)
         )
     
     with col3:
-        delta_color = "normal" if results['total_impr_delta'] >= 0 else "inverse"
+        # For impressions: positive change is good (green), negative is bad (red)
+        # Streamlit's "normal" mode handles this correctly: positive = green, negative = red
         st.metric(
             label="Total Impressions Change", 
             value=f"{results['total_impr_delta']:,}",
             delta=f"{results['total_impr_pct_change']:+.1f}%",
-            delta_color=delta_color
+            delta_color="normal"  # Always normal: positive = green (good), negative = red (bad)
         )
     
     with col4:
@@ -3325,10 +3678,15 @@ def display_query_results(results):
         else:
             st.info("No queries found with click gains and flat impressions")
     
-    # Strategic insights
+    # Strategic insights - AI-powered
     st.markdown('<div class="section-header">💡 Strategic Insights</div>', unsafe_allow_html=True)
-    insights = generate_query_insights(results)
-    st.markdown(f'<div class="insight-box">{insights}</div>', unsafe_allow_html=True)
+    
+    st.info("💡 **AI-Powered Insights:** Strategic insights are generated using AI. Set your OpenAI API key as an environment variable `OPENAI_API_KEY` or in Streamlit secrets.")
+    
+    with st.spinner("🤖 Generating AI-powered strategic insights..."):
+        analysis_summary = create_query_analysis_summary(results)
+        insights = generate_chatgpt_insights(analysis_summary, "queries")
+        st.markdown(f'<div class="insight-box">{insights.replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
     
     # Download section
     st.markdown('<div class="section-header">📥 Download Results</div>', unsafe_allow_html=True)
@@ -3459,174 +3817,6 @@ STRATEGIC INSIGHTS
 """
     
     return report
-
-def competitor_analysis():
-    """Analyze competitor rankings and gaps"""
-    st.markdown('<div class="section-header">🏁 Competitor Gap Analysis</div>', unsafe_allow_html=True)
-    
-    # Modern instruction design
-    with st.container():
-        st.markdown("### 📊 Analysis Overview")
-        
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            st.markdown("""
-            This analysis examines your competitive landscape to understand:
-            
-            **🎯 Key Questions Answered:**
-            - Who are your real search competitors (not just business rivals)?
-            - Where do competitors consistently outrank you?
-            - Which of your declining keywords show competitive pressure?
-            - What specific keyword gaps present opportunities?
-            """)
-        
-        with col2:
-            st.info("""
-            **💡 Strategic Value**
-            
-            Identifies the domains shaping your SERPs and reveals specific keyword opportunities to target.
-            """)
-    
-    # File requirements in expandable section
-    with st.expander("📁 **File Requirements & Setup**", expanded=False):
-        st.markdown("""
-        **Required Files:** 2 files minimum, 3+ for detailed analysis
-        
-        | File | Purpose | Export From |
-        |------|---------|-------------|
-        | **Semrush Competitors** | Identify top competitors | Organic Research → Competitors |
-        | **Your Positions (current)** | Your current rankings | Organic Research → Positions |
-        | **Competitor Positions** | Optional: Detailed gaps | Individual competitor Position exports |
-        
-        **📋 Export Steps:**
-        1. **Competitors**: Export from Competitors tab (shows relevance & overlap)
-        2. **Your Positions**: Current month positions export  
-        3. **Optional**: Export positions for top 3-5 competitors individually
-        
-        **🔍 Analysis Method:**
-        - Identifies top competitors by relevance/keyword overlap
-        - Counts where each competitor outranks you
-        - Shows specific keyword gap opportunities
-        - Focuses on competitive pressure for declining queries
-        """)
-    
-    # Key insights preview
-    st.markdown("### 🎯 Analysis Insights You'll Get")
-    
-    insight_col1, insight_col2, insight_col3, insight_col4 = st.columns(4)
-    
-    with insight_col1:
-        st.markdown("""
-        **🥇 Top Competitors**
-        - Real search competitors by relevance
-        - Keyword overlap analysis
-        """)
-    
-    with insight_col2:
-        st.markdown("""
-        **📊 Outrank Counts**
-        - Where competitors beat you
-        - Win/loss ratios by competitor
-        """)
-    
-    with insight_col3:
-        st.markdown("""
-        **🎯 Gap Opportunities**
-        - Specific keywords to target
-        - Competitive displacement analysis
-        """)
-    
-    with insight_col4:
-        st.markdown("""
-        **📉 Pressure Analysis**
-        - Competitors affecting declining queries
-        - Strategic counter-moves
-        """)
-    
-    st.markdown("---")
-    
-    # File upload section
-    st.markdown("### 📤 Upload Your Data Files")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("#### 🏆 Semrush Competitors (Required)")
-        competitors_file = st.file_uploader(
-            "Upload Semrush Competitors file",
-            type=['csv', 'xlsx', 'xls'],
-            key="competitors_file",
-            help="Export from Semrush: Organic Research → Competitors"
-        )
-        
-    with col2:
-        st.markdown("#### 📊 Your Positions (Required)")
-        your_positions_file = st.file_uploader(
-            "Upload Your Semrush Positions file",
-            type=['csv', 'xlsx', 'xls'],
-            key="your_positions_file",
-            help="Export from Semrush: Organic Research → Positions (current)"
-        )
-    
-    # Optional competitor positions
-    st.markdown("#### 🎯 Competitor Positions (Optional - for detailed gap analysis)")
-    competitor_positions_files = st.file_uploader(
-        "Upload competitor position files (one per competitor)",
-        type=['csv', 'xlsx', 'xls'],
-        accept_multiple_files=True,
-        key="competitor_positions_files",
-        help="Optional: Individual position exports for top competitors"
-    )
-    
-    # Process files if minimum required files uploaded
-    if competitors_file is not None and your_positions_file is not None:
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            run_competitor_analysis = st.button("🚀 Run Competitor Analysis", key="run_competitors", type="primary", use_container_width=True)
-        
-        if run_competitor_analysis:
-            with st.spinner("🔄 Analyzing competitive landscape..."):
-                try:
-                    # Load main files
-                    competitors_df = normalize_columns(read_uploaded_file(competitors_file))
-                    your_positions_df = normalize_columns(read_uploaded_file(your_positions_file))
-                    
-                    # Load optional competitor files
-                    competitor_data = {}
-                    if competitor_positions_files:
-                        for comp_file in competitor_positions_files:
-                            try:
-                                comp_df = normalize_columns(read_uploaded_file(comp_file))
-                                # Try to infer domain from filename or data
-                                domain = infer_competitor_domain(comp_file.name, comp_df)
-                                if domain:
-                                    competitor_data[domain] = comp_df
-                            except Exception as e:
-                                st.warning(f"Could not process {comp_file.name}: {str(e)}")
-                    
-                    # Validate data
-                    validation_passed, validation_message = validate_competitor_data(competitors_df, your_positions_df)
-                    
-                    if not validation_passed:
-                        st.error(validation_message)
-                        st.stop()
-                    
-                    # Perform analysis
-                    competitor_results = analyze_competitor_gaps(competitors_df, your_positions_df, competitor_data)
-                    
-                    # Display results
-                    display_competitor_results(competitor_results)
-                    
-                except Exception as e:
-                    st.error(f"❌ Error processing files: {str(e)}")
-                    st.info("💡 Please ensure you've uploaded valid Semrush files")
-    else:
-        missing = []
-        if competitors_file is None:
-            missing.append("Competitors file")
-        if your_positions_file is None:
-            missing.append("Your Positions file")
-        st.info(f"📤 Please upload: {', '.join(missing)}")
 
 def infer_competitor_domain(filename, df):
     """Infer competitor domain from filename or data"""
@@ -4196,10 +4386,15 @@ def display_enhanced_competitor_analysis(results):
     if intel_insights:
         st.markdown(f'<div class="insight-box">{"<br><br>".join(intel_insights)}</div>', unsafe_allow_html=True)
     
-    # Strategic insights
+    # Strategic insights - AI-powered
     st.markdown('<div class="section-header">💡 Strategic Insights</div>', unsafe_allow_html=True)
-    insights = generate_competitor_insights(results)
-    st.markdown(f'<div class="insight-box">{insights}</div>', unsafe_allow_html=True)
+    
+    st.info("💡 **AI-Powered Insights:** Strategic insights are generated using AI. Set your OpenAI API key as an environment variable `OPENAI_API_KEY` or in Streamlit secrets.")
+    
+    with st.spinner("🤖 Generating AI-powered strategic insights..."):
+        analysis_summary = create_competitor_analysis_summary(results)
+        insights = generate_chatgpt_insights(analysis_summary, "competitors")
+        st.markdown(f'<div class="insight-box">{insights.replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
     
     # Download section
     st.markdown('<div class="section-header">📥 Download Results</div>', unsafe_allow_html=True)
@@ -4357,747 +4552,168 @@ def read_uploaded_file_safe(uploaded_file):
             return None
     return None
 
-def traffic_attribution_analysis():
-    """Analyze comprehensive traffic attribution from GSC and GA4"""
-    st.markdown('<div class="section-header">📈 Traffic Attribution Analysis</div>', unsafe_allow_html=True)
-    
-    # Modern instruction design
-    with st.container():
-        st.markdown("### 📊 Analysis Overview")
+# REMOVED: traffic_attribution_analysis() and all related helper functions have been removed
+
+
+def generate_chatgpt_insights(analysis_summary, analysis_type="comprehensive"):
+    """Generate strategic insights using ChatGPT API"""
+    try:
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            # Try to get from Streamlit secrets
+            try:
+                api_key = st.secrets.get("OPENAI_API_KEY", "")
+            except:
+                pass
         
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            st.markdown("""
-            This comprehensive analysis examines your organic performance using multiple data sources:
-            
-            **🎯 Key Questions Answered:**
-            - How have sitewide clicks and impressions changed year-over-year?
-            - Which specific queries and landing pages drive the most impact?
-            - Do GA4 sessions confirm GSC click trends?
-            - What conversion opportunities exist in your organic traffic?
-            """)
+        if not api_key:
+            return "⚠️ OpenAI API key not found. Please set OPENAI_API_KEY environment variable or add it to Streamlit secrets to enable AI-powered insights."
         
-        with col2:
-            st.info("""
-            **💡 Strategic Value**
-            
-            Combines GSC performance data with GA4 traffic and conversion insights for complete attribution analysis.
-            """)
-    
-    # File requirements in expandable section
-    with st.expander("📁 **File Requirements & Setup**", expanded=False):
-        st.markdown("""
-        **Required Files:** 3 files for comprehensive analysis
+        client = OpenAI(api_key=api_key)
         
-        | File | Purpose | Your File |
-        |------|---------|-----------|
-        | **GSC Queries Compare** | Query performance YoY | `falconstructures_gsc_queries_compareyoy_20250819.xlsx` |
-        | **GA4 Traffic Acquisition** | Session validation | `falconstructures_ga4_trafficacquisition_organic_20250501_to_20250731.csv` |
-        | **GA4 Landing Page** | Page performance | `falconstructures_ga4_landingpage_organic_20250501_to_20250731.csv` |
+        # Customize prompt based on analysis type
+        analysis_context = {
+            "visibility": "keyword visibility and ranking distribution analysis",
+            "movement": "keyword ranking movement and position changes analysis",
+            "pages": "page performance and traffic concentration analysis",
+            "queries": "Google Search Console query performance analysis",
+            "competitors": "competitive analysis and market positioning",
+            "comprehensive": "comprehensive SEO performance analysis"
+        }
         
-        **📊 Analysis Combines:**
-        - GSC query-level performance changes
-        - GA4 traffic acquisition metrics
-        - Landing page engagement and conversion data
-        """)
-    
-    # Key insights preview
-    st.markdown("### 🎯 Comprehensive Insights You'll Get")
-    
-    insight_col1, insight_col2, insight_col3, insight_col4 = st.columns(4)
-    
-    with insight_col1:
-        st.markdown("""
-        **📊 Query Performance**
-        - YoY clicks/impressions changes
-        - CTR pressure identification
-        """)
-    
-    with insight_col2:
-        st.markdown("""
-        **🎯 Session Validation**
-        - GA4 session confirmation
-        - Engagement metrics
-        """)
-    
-    with insight_col3:
-        st.markdown("""
-        **📄 Landing Page Impact**
-        - Top performing pages
-        - Conversion optimization opportunities
-        """)
-    
-    with insight_col4:
-        st.markdown("""
-        **💡 Integrated Insights**
-        - Cross-platform analysis
-        - Actionable recommendations
-        """)
-    
-    st.markdown("---")
-    
-    # File upload section
-    st.markdown("### 📤 Upload Your Three Data Files")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.markdown("#### 📊 GSC Queries Compare")
-        gsc_queries_file = st.file_uploader(
-            "Upload GSC Queries Compare file",
-            type=['csv', 'xlsx', 'xls'],
-            key="gsc_queries_compare",
-            help="Your GSC queries YoY comparison file"
+        context = analysis_context.get(analysis_type, "SEO performance analysis")
+        
+        prompt = f"""You are an expert SEO strategist with 15+ years of experience. Analyze the following {context} and provide strategic, actionable insights that drive business results. Be specific, data-driven, and focus on ROI-impacting recommendations.
+
+{analysis_summary}
+
+Provide a focused analysis with:
+
+1. **Key Findings** (3-4 bullet points)
+   - Most important trends and patterns
+   - Quantifiable changes with specific numbers
+   - What this means for the business
+
+2. **Critical Issues** (3-4 bullet points)
+   - Performance problems requiring immediate attention
+   - Specific metrics showing decline
+   - Root cause hypotheses
+
+3. **Opportunities** (3-4 bullet points)
+   - Quick wins and low-hanging fruit
+   - Areas with high potential
+   - Specific actions to capitalize
+
+4. **Strategic Recommendations** (4-5 actionable items)
+   - Prioritized by impact
+   - Specific steps to take
+   - Expected outcomes and timelines
+
+5. **Priority Actions** (top 3 immediate actions)
+   - What to do this week
+   - Specific steps
+   - Success metrics
+
+Format as clear, professional insights. Use specific numbers from the data. Be actionable and focus on business impact. Use HTML formatting with <b> for emphasis and <br> for line breaks."""
+        
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an expert SEO strategist providing data-driven insights and recommendations."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=1500
         )
         
-    with col2:
-        st.markdown("#### 📈 GA4 Traffic Acquisition")
-        ga4_traffic_file = st.file_uploader(
-            "Upload GA4 Traffic Acquisition file",
-            type=['csv', 'xlsx', 'xls'],
-            key="ga4_traffic_acq",
-            help="GA4 organic traffic acquisition data"
-        )
-    
-    with col3:
-        st.markdown("#### 📄 GA4 Landing Page")
-        ga4_landing_file = st.file_uploader(
-            "Upload GA4 Landing Page file",
-            type=['csv', 'xlsx', 'xls'],
-            key="ga4_landing_pages",
-            help="GA4 organic landing page performance"
-        )
-    
-    # Process files if all are uploaded
-    if gsc_queries_file is not None and ga4_traffic_file is not None and ga4_landing_file is not None:
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            run_comprehensive_analysis = st.button("🚀 Run Comprehensive Analysis", key="run_comprehensive", type="primary", use_container_width=True)
-        
-        if run_comprehensive_analysis:
-            with st.spinner("🔄 Analyzing comprehensive traffic attribution..."):
-                try:
-                    # Load all three files
-                    gsc_df = read_uploaded_file_safe(gsc_queries_file)
-                    gsc_df = normalize_columns(gsc_df)
-                    
-                    ga4_traffic_df = read_uploaded_file_safe(ga4_traffic_file)
-                    ga4_traffic_df = normalize_columns(ga4_traffic_df)
-                    
-                    ga4_landing_df = read_uploaded_file_safe(ga4_landing_file)
-                    ga4_landing_df = normalize_columns(ga4_landing_df)
-                    
-                    # Validate all data
-                    gsc_valid, gsc_msg = validate_gsc_queries_data(gsc_df)
-                    ga4_traffic_valid, ga4_traffic_msg = validate_ga4_traffic_data(ga4_traffic_df)
-                    ga4_landing_valid, ga4_landing_msg = validate_ga4_landing_data(ga4_landing_df)
-                    
-                    if not gsc_valid:
-                        st.error(f"GSC Data: {gsc_msg}")
-                        st.stop()
-                    if not ga4_traffic_valid:
-                        st.error(f"GA4 Traffic Data: {ga4_traffic_msg}")
-                        st.stop()
-                    if not ga4_landing_valid:
-                        st.error(f"GA4 Landing Data: {ga4_landing_msg}")
-                        st.stop()
-                    
-                    # Perform comprehensive analysis
-                    comprehensive_results = analyze_comprehensive_attribution(gsc_df, ga4_traffic_df, ga4_landing_df)
-                    
-                    # Display results
-                    display_comprehensive_results(comprehensive_results)
-                    
-                except Exception as e:
-                    st.error(f"❌ Error processing files: {str(e)}")
-                    st.info("💡 Please ensure all three files are uploaded and properly formatted")
-    else:
-        missing_files = []
-        if gsc_queries_file is None:
-            missing_files.append("GSC Queries Compare")
-        if ga4_traffic_file is None:
-            missing_files.append("GA4 Traffic Acquisition")
-        if ga4_landing_file is None:
-            missing_files.append("GA4 Landing Page")
-        
-        st.info(f"📤 Please upload: {', '.join(missing_files)}")
+        return response.choices[0].message.content
+    except Exception as e:
+        return f"⚠️ Error generating AI insights: {str(e)}. Please check your OpenAI API key configuration."
 
-def validate_gsc_queries_data(df):
-    """Validate GSC Queries data structure"""
-    if df is None or len(df) == 0:
-        return False, "File appears to be empty"
+def create_visibility_analysis_summary(results):
+    """Create analysis summary for AI insights - Visibility"""
+    total_change = results['total_change']
+    total_change_pct = results['total_change_pct']
+    top_3_share = results['bucket_changes']['top_3']['current_share']
+    top_10_share = results['bucket_changes']['top_3']['current_share'] + results['bucket_changes']['top_4_10']['current_share']
+    top_21_plus_share = results['bucket_changes']['top_21_plus']['current_share']
     
-    st.info(f"📋 GSC Queries columns: {list(df.columns)[:10]}")
-    
-    # Look for query comparison columns
-    query_col = find_column(df.columns, ['top queries', 'query'])
-    clicks_current = find_column(df.columns, ['last 3 months clicks', 'clicks'])
-    clicks_previous = find_column(df.columns, ['previous 3 months clicks', 'same period last year clicks'])
-    
-    if not query_col or not clicks_current or not clicks_previous:
-        return False, "Missing required GSC query comparison columns"
-    
-    return True, "GSC data validated"
+    return f"""KEYWORD VISIBILITY ANALYSIS:
 
-def validate_ga4_traffic_data(df):
-    """Validate GA4 Traffic Acquisition data - Updated for flexible column matching"""
-    if df is None or len(df) == 0:
-        return False, "File appears to be empty"
-    
-    st.info(f"📋 GA4 Traffic columns detected: {list(df.columns)}")
-    
-    # Look for sessions column with more flexible matching
-    sessions_col = find_column(df.columns, ['sessions', 'session', 'users', 'active users'])
-    
-    if not sessions_col:
-        # List available columns to help debug
-        available_cols = ", ".join(list(df.columns)[:15])  # Show first 15 columns
-        return False, f"Missing Sessions/Users column. Available columns: {available_cols}"
-    
-    return True, "GA4 traffic data validated"
+Total Keywords: {results['total_current']:,} (current) vs {results['total_previous']:,} (previous)
+Net Change: {total_change:+,} keywords ({total_change_pct:+.1f}%)
 
-def analyze_ga4_traffic_detailed(ga4_df):
-    """Detailed GA4 traffic analysis - Updated for flexible column matching"""
-    
-    # Find columns with more flexible matching
-    sessions_col = find_column(ga4_df.columns, ['sessions', 'session'])
-    users_col = find_column(ga4_df.columns, ['users', 'active users', 'total users'])
-    engaged_sessions_col = find_column(ga4_df.columns, ['engaged sessions'])
-    events_col = find_column(ga4_df.columns, ['key events', 'conversions', 'events', 'total events'])
-    bounce_rate_col = find_column(ga4_df.columns, ['bounce rate'])
-    avg_duration_col = find_column(ga4_df.columns, ['average engagement time', 'avg engagement time', 'engagement time'])
-    engagement_rate_col = find_column(ga4_df.columns, ['engagement rate', 'engaged sessions per user'])
-    
-    # If we have multiple rows, try to find the organic search row
-    organic_row = None
-    
-    # Check if there's a channel grouping column
-    channel_col = find_column(ga4_df.columns, ['default channel group', 'session default channel group', 'channel', 'source', 'medium'])
-    
-    if channel_col:
-        # Look for organic search row
-        organic_mask = ga4_df[channel_col].str.contains('Organic', case=False, na=False)
-        if organic_mask.any():
-            organic_row = ga4_df[organic_mask].iloc[0]
-        else:
-            # If no organic found, use first row (assuming it's already filtered)
-            organic_row = ga4_df.iloc[0] if len(ga4_df) > 0 else None
-    else:
-        # No channel column, assume data is already filtered to organic
-        organic_row = ga4_df.iloc[0] if len(ga4_df) > 0 else None
-    
-    if organic_row is None:
-        return None
-    
-    analysis = {}
-    
-    # Extract available metrics
-    if sessions_col:
-        analysis['sessions'] = pd.to_numeric(organic_row[sessions_col], errors='coerce')
-    elif users_col:
-        # If no sessions column, use users as a proxy
-        analysis['sessions'] = pd.to_numeric(organic_row[users_col], errors='coerce')
-        
-    if users_col:
-        analysis['users'] = pd.to_numeric(organic_row[users_col], errors='coerce')
-    if engaged_sessions_col:
-        analysis['engaged_sessions'] = pd.to_numeric(organic_row[engaged_sessions_col], errors='coerce')
-    if events_col:
-        analysis['key_events'] = pd.to_numeric(organic_row[events_col], errors='coerce')
-    if bounce_rate_col:
-        analysis['bounce_rate'] = pd.to_numeric(organic_row[bounce_rate_col], errors='coerce')
-    if avg_duration_col:
-        analysis['avg_engagement_time'] = pd.to_numeric(organic_row[avg_duration_col], errors='coerce')
-    if engagement_rate_col:
-        analysis['engagement_rate'] = pd.to_numeric(organic_row[engagement_rate_col], errors='coerce')
-    
-    # Calculate engagement rate if we have the components
-    if 'engagement_rate' not in analysis and 'sessions' in analysis and 'engaged_sessions' in analysis and analysis['sessions'] > 0:
-        analysis['engagement_rate'] = (analysis['engaged_sessions'] / analysis['sessions'] * 100)
-    
-    # Calculate conversion rate if we have the components
-    if 'sessions' in analysis and 'key_events' in analysis and analysis['sessions'] > 0:
-        analysis['conversion_rate'] = (analysis['key_events'] / analysis['sessions'] * 100)
-    
-    return analysis
+Ranking Distribution (Current):
+- Top 3 Rankings: {results['bucket_changes']['top_3']['current']:,} keywords ({top_3_share:.1f}% of total)
+- Top 4-10 Rankings: {results['bucket_changes']['top_4_10']['current']:,} keywords ({results['bucket_changes']['top_4_10']['current_share']:.1f}%)
+- Top 11-20 Rankings: {results['bucket_changes']['top_11_20']['current']:,} keywords ({results['bucket_changes']['top_11_20']['current_share']:.1f}%)
+- Rankings 21+: {results['bucket_changes']['top_21_plus']['current']:,} keywords ({top_21_plus_share:.1f}%)
 
-def validate_ga4_landing_data(df):
-    """Validate GA4 Landing Page data"""
-    if df is None or len(df) == 0:
-        return False, "File appears to be empty"
-    
-    st.info(f"📋 GA4 Landing columns: {list(df.columns)[:10]}")
-    
-    # Look for landing page and sessions columns
-    landing_col = find_column(df.columns, ['landing page', 'page'])
-    sessions_col = find_column(df.columns, ['sessions'])
-    
-    if not landing_col or not sessions_col:
-        return False, "Missing Landing Page or Sessions columns"
-    
-    return True, "GA4 landing data validated"
+Changes by Bucket:
+- Top 3: {results['bucket_changes']['top_3']['change']:+,} ({results['bucket_changes']['top_3']['change_pct']:+.1f}%)
+- Top 4-10: {results['bucket_changes']['top_4_10']['change']:+,} ({results['bucket_changes']['top_4_10']['change_pct']:+.1f}%)
+- Top 11-20: {results['bucket_changes']['top_11_20']['change']:+,} ({results['bucket_changes']['top_11_20']['change_pct']:+.1f}%)
+- 21+: {results['bucket_changes']['top_21_plus']['change']:+,} ({results['bucket_changes']['top_21_plus']['change_pct']:+.1f}%)
 
-def analyze_comprehensive_attribution(gsc_df, ga4_traffic_df, ga4_landing_df):
-    """Comprehensive analysis combining all three data sources"""
-    
-    # 1. GSC Query Analysis
-    gsc_analysis = analyze_gsc_queries(gsc_df)
-    
-    # 2. GA4 Traffic Analysis 
-    ga4_traffic_analysis = analyze_ga4_traffic_detailed(ga4_traffic_df)
-    
-    # 3. GA4 Landing Page Analysis
-    ga4_landing_analysis = analyze_ga4_landing_pages(ga4_landing_df)
-    
-    # 4. Cross-platform insights
-    integrated_insights = generate_integrated_insights(gsc_analysis, ga4_traffic_analysis, ga4_landing_analysis)
-    
-    return {
-        'gsc_analysis': gsc_analysis,
-        'ga4_traffic': ga4_traffic_analysis,
-        'ga4_landing': ga4_landing_analysis,
-        'integrated_insights': integrated_insights,
-        'performance_pattern': analyze_performance_pattern(
-            gsc_analysis['clicks_delta'], 
-            gsc_analysis['impr_delta'], 
-            gsc_analysis['ctr_delta_pp'], 
-            None
-        )
-    }
-
-def analyze_gsc_queries(gsc_df):
-    """Analyze GSC queries data"""
-    
-    # Find columns
-    query_col = find_column(gsc_df.columns, ['top queries', 'query'])
-    clicks_now = find_column(gsc_df.columns, ['last 3 months clicks', 'clicks'])
-    clicks_prev = find_column(gsc_df.columns, ['previous 3 months clicks', 'same period last year clicks'])
-    impr_now = find_column(gsc_df.columns, ['last 3 months impressions', 'impressions'])
-    impr_prev = find_column(gsc_df.columns, ['previous 3 months impressions', 'same period last year impressions'])
-    pos_now = find_column(gsc_df.columns, ['last 3 months position', 'position'])
-    pos_prev = find_column(gsc_df.columns, ['previous 3 months position', 'same period last year position'])
-    
-    # Calculate totals
-    total_clicks_now = pd.to_numeric(gsc_df[clicks_now], errors='coerce').sum()
-    total_clicks_prev = pd.to_numeric(gsc_df[clicks_prev], errors='coerce').sum()
-    total_impr_now = pd.to_numeric(gsc_df[impr_now], errors='coerce').sum() if impr_now else 0
-    total_impr_prev = pd.to_numeric(gsc_df[impr_prev], errors='coerce').sum() if impr_prev else 0
-    
-    # Calculate changes
-    clicks_delta = total_clicks_now - total_clicks_prev
-    clicks_pct_change = (clicks_delta / total_clicks_prev * 100) if total_clicks_prev > 0 else 0
-    impr_delta = total_impr_now - total_impr_prev
-    impr_pct_change = (impr_delta / total_impr_prev * 100) if total_impr_prev > 0 else 0
-    
-    # Calculate CTR
-    weighted_ctr_now = (total_clicks_now / total_impr_now * 100) if total_impr_now > 0 else 0
-    weighted_ctr_prev = (total_clicks_prev / total_impr_prev * 100) if total_impr_prev > 0 else 0
-    ctr_delta_pp = weighted_ctr_now - weighted_ctr_prev
-    
-    # Top queries analysis
-    gsc_df['Clicks_Delta'] = pd.to_numeric(gsc_df[clicks_now], errors='coerce') - pd.to_numeric(gsc_df[clicks_prev], errors='coerce')
-    top_gaining_queries = gsc_df.sort_values('Clicks_Delta', ascending=False).head(10)
-    top_losing_queries = gsc_df.sort_values('Clicks_Delta', ascending=True).head(10)
-    
-    return {
-        'total_clicks_now': total_clicks_now,
-        'total_clicks_prev': total_clicks_prev,
-        'clicks_delta': clicks_delta,
-        'clicks_pct_change': clicks_pct_change,
-        'total_impr_now': total_impr_now,
-        'total_impr_prev': total_impr_prev,
-        'impr_delta': impr_delta,
-        'impr_pct_change': impr_pct_change,
-        'weighted_ctr_now': weighted_ctr_now,
-        'weighted_ctr_prev': weighted_ctr_prev,
-        'ctr_delta_pp': ctr_delta_pp,
-        'top_gaining_queries': top_gaining_queries,
-        'top_losing_queries': top_losing_queries,
-        'total_queries': len(gsc_df)
-    }
-
-def analyze_ga4_traffic_detailed(ga4_df):
-    """Detailed GA4 traffic analysis"""
-    
-    # Find columns
-    sessions_col = find_column(ga4_df.columns, ['sessions'])
-    users_col = find_column(ga4_df.columns, ['users', 'active users'])
-    engaged_sessions_col = find_column(ga4_df.columns, ['engaged sessions'])
-    events_col = find_column(ga4_df.columns, ['key events', 'conversions', 'events'])
-    bounce_rate_col = find_column(ga4_df.columns, ['bounce rate'])
-    avg_duration_col = find_column(ga4_df.columns, ['average engagement time', 'avg engagement time'])
-    
-    # Extract metrics (assuming organic search is already filtered or is the main row)
-    row = ga4_df.iloc[0] if len(ga4_df) > 0 else None
-    
-    if row is None:
-        return None
-    
-    analysis = {}
-    
-    if sessions_col:
-        analysis['sessions'] = pd.to_numeric(row[sessions_col], errors='coerce')
-    if users_col:
-        analysis['users'] = pd.to_numeric(row[users_col], errors='coerce')
-    if engaged_sessions_col:
-        analysis['engaged_sessions'] = pd.to_numeric(row[engaged_sessions_col], errors='coerce')
-    if events_col:
-        analysis['key_events'] = pd.to_numeric(row[events_col], errors='coerce')
-    if bounce_rate_col:
-        analysis['bounce_rate'] = pd.to_numeric(row[bounce_rate_col], errors='coerce')
-    if avg_duration_col:
-        analysis['avg_engagement_time'] = pd.to_numeric(row[avg_duration_col], errors='coerce')
-    
-    # Calculate engagement rate
-    if 'sessions' in analysis and 'engaged_sessions' in analysis and analysis['sessions'] > 0:
-        analysis['engagement_rate'] = (analysis['engaged_sessions'] / analysis['sessions'] * 100)
-    
-    # Calculate conversion rate
-    if 'sessions' in analysis and 'key_events' in analysis and analysis['sessions'] > 0:
-        analysis['conversion_rate'] = (analysis['key_events'] / analysis['sessions'] * 100)
-    
-    return analysis
-
-def analyze_ga4_landing_pages(ga4_df):
-    """Analyze GA4 landing page performance"""
-    
-    # Find columns
-    landing_col = find_column(ga4_df.columns, ['landing page', 'page'])
-    sessions_col = find_column(ga4_df.columns, ['sessions'])
-    users_col = find_column(ga4_df.columns, ['users', 'active users'])
-    engaged_sessions_col = find_column(ga4_df.columns, ['engaged sessions'])
-    events_col = find_column(ga4_df.columns, ['key events', 'conversions'])
-    avg_duration_col = find_column(ga4_df.columns, ['average engagement time', 'avg engagement time'])
-    
-    # Build working dataframe
-    work_df = pd.DataFrame()
-    work_df['Landing_Page'] = ga4_df[landing_col].astype(str)
-    work_df['Sessions'] = pd.to_numeric(ga4_df[sessions_col], errors='coerce')
-    
-    if users_col:
-        work_df['Users'] = pd.to_numeric(ga4_df[users_col], errors='coerce')
-    if engaged_sessions_col:
-        work_df['Engaged_Sessions'] = pd.to_numeric(ga4_df[engaged_sessions_col], errors='coerce')
-    if events_col:
-        work_df['Key_Events'] = pd.to_numeric(ga4_df[events_col], errors='coerce')
-    if avg_duration_col:
-        work_df['Avg_Engagement_Time'] = pd.to_numeric(ga4_df[avg_duration_col], errors='coerce')
-    
-    # Calculate rates
-    if 'Engaged_Sessions' in work_df.columns:
-        work_df['Engagement_Rate'] = (work_df['Engaged_Sessions'] / work_df['Sessions'] * 100).round(2)
-    if 'Key_Events' in work_df.columns:
-        work_df['Conversion_Rate'] = (work_df['Key_Events'] / work_df['Sessions'] * 100).round(2)
-    
-    # Sort by sessions
-    work_df = work_df.sort_values('Sessions', ascending=False)
-    
-    # Top performers
-    top_pages_by_sessions = work_df.head(20)
-    
-    # High conversion pages (if conversion data available)
-    high_conversion_pages = pd.DataFrame()
-    if 'Conversion_Rate' in work_df.columns:
-        high_conversion_pages = work_df[work_df['Sessions'] >= 10].sort_values('Conversion_Rate', ascending=False).head(15)
-    
-    return {
-        'total_sessions': work_df['Sessions'].sum(),
-        'total_pages': len(work_df),
-        'top_pages': top_pages_by_sessions,
-        'high_conversion_pages': high_conversion_pages,
-        'avg_engagement_rate': work_df['Engagement_Rate'].mean() if 'Engagement_Rate' in work_df.columns else None,
-        'avg_conversion_rate': work_df['Conversion_Rate'].mean() if 'Conversion_Rate' in work_df.columns else None
-    }
-
-def generate_integrated_insights(gsc_analysis, ga4_traffic, ga4_landing):
-    """Generate insights combining all three data sources"""
-    insights = []
-    
-    # GSC vs GA4 validation
-    gsc_clicks = gsc_analysis['total_clicks_now']
-    ga4_sessions = ga4_traffic.get('sessions', 0) if ga4_traffic else 0
-    
-    if gsc_clicks > 0 and ga4_sessions > 0:
-        click_to_session_ratio = ga4_sessions / gsc_clicks
-        if click_to_session_ratio < 0.7:
-            insights.append("Traffic Validation: GA4 sessions significantly lower than GSC clicks - investigate tracking or filtering issues")
-        elif click_to_session_ratio > 1.3:
-            insights.append("Traffic Validation: GA4 sessions higher than GSC clicks - may include non-organic traffic or different attribution models")
-        else:
-            insights.append("Traffic Validation: GSC clicks and GA4 sessions align well, confirming data accuracy")
-    
-    # Performance patterns
-    if gsc_analysis['clicks_delta'] < 0:
-        if ga4_traffic and ga4_traffic.get('engagement_rate', 0) > 60:
-            insights.append("Quality vs Quantity: Click volume declined but high engagement rate suggests better traffic quality")
-    
-    # Landing page opportunities
-    if ga4_landing and ga4_landing['avg_conversion_rate']:
-        if ga4_landing['avg_conversion_rate'] < 2:
-            insights.append("Conversion Opportunity: Low average conversion rate across landing pages - optimize CTAs and user experience")
-    
-    return insights
-
-def display_comprehensive_results(results):
-    """Display comprehensive analysis results"""
-    
-    # Performance Pattern Header
-    pattern = results['performance_pattern']
-    st.markdown(f"""
-    <div style="background-color: {'#d4edda' if pattern['color'] == 'success' else '#fff3cd' if pattern['color'] == 'warning' else '#f8d7da' if pattern['color'] == 'error' else '#d1ecf1'}; 
-    padding: 1rem; border-radius: 10px; margin: 1rem 0; border-left: 4px solid {'#28a745' if pattern['color'] == 'success' else '#ffc107' if pattern['color'] == 'warning' else '#dc3545' if pattern['color'] == 'error' else '#17a2b8'};">
-        <h4>{pattern['icon']} {pattern['description']}</h4>
-        <p>{pattern['detail']}</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Combined Key Metrics
-    st.markdown('<div class="section-header">📈 Comprehensive Performance Summary</div>', unsafe_allow_html=True)
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    gsc = results['gsc_analysis']
-    ga4_traffic = results['ga4_traffic']
-    ga4_landing = results['ga4_landing']
-    
-    with col1:
-        st.metric(
-            label="GSC Clicks Change",
-            value=f"{gsc['clicks_delta']:,}",
-            delta=f"{gsc['clicks_pct_change']:+.1f}%"
-        )
-    
-    with col2:
-        if ga4_traffic and 'sessions' in ga4_traffic:
-            st.metric(
-                label="GA4 Organic Sessions",
-                value=f"{ga4_traffic['sessions']:,}"
-            )
-        else:
-            st.metric(label="GA4 Sessions", value="N/A")
-    
-    with col3:
-        if ga4_traffic and 'engagement_rate' in ga4_traffic:
-            st.metric(
-                label="Engagement Rate",
-                value=f"{ga4_traffic['engagement_rate']:.1f}%"
-            )
-        else:
-            st.metric(label="Engagement Rate", value="N/A")
-    
-    with col4:
-        if ga4_landing and ga4_landing['avg_conversion_rate']:
-            st.metric(
-                label="Avg Conversion Rate",
-                value=f"{ga4_landing['avg_conversion_rate']:.2f}%"
-            )
-        else:
-            st.metric(label="Conversion Rate", value="N/A")
-    
-    # GSC Query Performance
-    st.markdown('<div class="section-header">📊 Query Performance Analysis</div>', unsafe_allow_html=True)
-    
-    query_col1, query_col2 = st.columns(2)
-    
-    with query_col1:
-        st.markdown("**Top Gaining Queries**")
-        if not gsc['top_gaining_queries'].empty:
-            gaining_display = gsc['top_gaining_queries'][['Query', 'Clicks_Delta']].head(10) if 'Query' in gsc['top_gaining_queries'].columns else pd.DataFrame()
-            if not gaining_display.empty:
-                st.dataframe(gaining_display, use_container_width=True, hide_index=True)
-    
-    with query_col2:
-        st.markdown("**Top Losing Queries**")
-        if not gsc['top_losing_queries'].empty:
-            losing_display = gsc['top_losing_queries'][['Query', 'Clicks_Delta']].head(10) if 'Query' in gsc['top_losing_queries'].columns else pd.DataFrame()
-            if not losing_display.empty:
-                st.dataframe(losing_display, use_container_width=True, hide_index=True)
-    
-    # Landing Page Performance
-    if ga4_landing and not ga4_landing['top_pages'].empty:
-        st.markdown('<div class="section-header">📄 Landing Page Performance</div>', unsafe_allow_html=True)
-        
-        # Top pages by sessions
-        st.markdown("**Top Landing Pages by Sessions**")
-        display_cols = ['Landing_Page', 'Sessions']
-        if 'Engagement_Rate' in ga4_landing['top_pages'].columns:
-            display_cols.append('Engagement_Rate')
-        if 'Conversion_Rate' in ga4_landing['top_pages'].columns:
-            display_cols.append('Conversion_Rate')
-        
-        pages_display = ga4_landing['top_pages'][display_cols].head(15)
-        st.dataframe(pages_display, use_container_width=True, hide_index=True)
-        
-        # High conversion pages
-        if not ga4_landing['high_conversion_pages'].empty:
-            st.markdown("**Highest Converting Landing Pages**")
-            conversion_display = ga4_landing['high_conversion_pages'][['Landing_Page', 'Sessions', 'Conversion_Rate']].head(10)
-            st.dataframe(conversion_display, use_container_width=True, hide_index=True)
-    
-    # Integrated Insights
-    st.markdown('<div class="section-header">💡 Integrated Strategic Insights</div>', unsafe_allow_html=True)
-    
-    all_insights = results['integrated_insights']
-    
-    # Add pattern-specific insights
-    if pattern['type'] == 'ctr_pressure':
-        all_insights.append("CTR Challenge: Focus on snippet optimization and competitive analysis to reclaim lost click share")
-    elif pattern['type'] == 'broad_growth':
-        all_insights.append("Strong Performance: Maintain current strategy and scale successful tactics across more keywords")
-    
-    if all_insights:
-        for insight in all_insights:
-            st.markdown(f"• {insight}")
-    else:
-        st.info("Analysis complete - review individual metrics above for detailed insights")
-    
-    # Download comprehensive report
-    st.markdown('<div class="section-header">📥 Download Comprehensive Report</div>', unsafe_allow_html=True)
-    
-    comprehensive_report = create_comprehensive_report(results)
-    st.download_button(
-        label="📄 Download Complete Attribution Analysis",
-        data=comprehensive_report,
-        file_name=f"comprehensive_attribution_analysis_{datetime.now().strftime('%Y%m%d')}.txt",
-        mime="text/plain"
-    )
-
-def create_comprehensive_report(results):
-    """Create comprehensive downloadable report"""
-    
-    gsc = results['gsc_analysis']
-    ga4_traffic = results['ga4_traffic']
-    ga4_landing = results['ga4_landing']
-    
-    report = f"""
-COMPREHENSIVE TRAFFIC ATTRIBUTION ANALYSIS
-Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-
-===========================================
-EXECUTIVE SUMMARY
-===========================================
-
-Performance Pattern: {results['performance_pattern']['description']}
-{results['performance_pattern']['detail']}
-
-===========================================
-GSC QUERY PERFORMANCE
-===========================================
-
-Total Queries Analyzed: {gsc['total_queries']:,}
-Click Performance:
-- Current Period: {gsc['total_clicks_now']:,} clicks
-- Previous Period: {gsc['total_clicks_prev']:,} clicks  
-- Change: {gsc['clicks_delta']:,} ({gsc['clicks_pct_change']:+.1f}%)
-
-Impression Performance:
-- Current Period: {gsc['total_impr_now']:,} impressions
-- Previous Period: {gsc['total_impr_prev']:,} impressions
-- Change: {gsc['impr_delta']:,} ({gsc['impr_pct_change']:+.1f}%)
-
-Weighted CTR: {gsc['weighted_ctr_now']:.2f}% (Δ {gsc['ctr_delta_pp']:+.2f}pp)
-
-===========================================
-GA4 TRAFFIC ACQUISITION
-===========================================
-
+Top 10 Share: {top_10_share:.1f}% of total keywords
 """
-    
-    if ga4_traffic:
-        for metric, value in ga4_traffic.items():
-            if isinstance(value, (int, float)) and not pd.isna(value):
-                unit = "%" if "rate" in metric else ""
-                report += f"• {metric.replace('_', ' ').title()}: {value:,.1f}{unit}\n"
-    else:
-        report += "GA4 Traffic data not available\n"
-    
-    report += f"""
 
-===========================================
-GA4 LANDING PAGE PERFORMANCE
-===========================================
+def create_movement_analysis_summary(results):
+    """Create analysis summary for AI insights - Movement"""
+    improved = results['movement_counts']['improved']
+    declined = results['movement_counts']['declined']
+    ratio = results['ratio']
+    ratio_display = f"{ratio:.2f}" if ratio != np.inf else "∞"
+    
+    return f"""KEYWORD MOVEMENT ANALYSIS:
 
+Total Keywords Tracked: {results['total_keywords']:,}
+Improved Rankings: {improved:,} keywords ({improved/results['total_keywords']*100:.1f}%)
+Declined Rankings: {declined:,} keywords ({declined/results['total_keywords']*100:.1f}%)
+Improvement Ratio: {ratio_display} (higher is better)
+Net Movement: {improved - declined:+,} keywords
+
+Top 3 Sources: {results.get('top3_sources', pd.Series()).to_dict() if not results.get('top3_sources', pd.Series()).empty else 'N/A'}
 """
-    
-    if ga4_landing:
-        report += f"""Total Landing Pages: {ga4_landing['total_pages']:,}
-Total Sessions: {ga4_landing['total_sessions']:,}
-Average Engagement Rate: {ga4_landing['avg_engagement_rate']:.1f}%
-Average Conversion Rate: {ga4_landing['avg_conversion_rate']:.2f}%
 
-Top Landing Pages:
+def create_pages_analysis_summary(results):
+    """Create analysis summary for AI insights - Pages"""
+    pages_50 = results['pareto_thresholds']['50%']
+    pages_80 = results['pareto_thresholds']['80%']
+    concentration_50 = (pages_50 / results['total_pages'] * 100) if results['total_pages'] > 0 else 0
+    
+    return f"""PAGE PERFORMANCE ANALYSIS:
+
+Total Pages Analyzed: {results['total_pages']:,}
+Total Estimated Traffic: {results['total_traffic']:,.0f}
+Traffic Concentration: {pages_50} pages ({concentration_50:.1f}% of total) drive 50% of traffic
+Traffic Concentration: {pages_80} pages ({(pages_80 / results['total_pages'] * 100) if results['total_pages'] > 0 else 0:.1f}% of total) drive 80% of traffic
+Long-tail Opportunities: {len(results.get('longtail_opportunities', pd.DataFrame()))} pages identified
 """
-        if not ga4_landing['top_pages'].empty:
-            for _, row in ga4_landing['top_pages'].head(10).iterrows():
-                report += f"• {row['Landing_Page']} - {row['Sessions']:,} sessions\n"
-    
-    report += f"""
 
-===========================================
-STRATEGIC INSIGHTS
-===========================================
+def create_query_analysis_summary(results):
+    """Create analysis summary for AI insights - Queries"""
+    return f"""GSC QUERY PERFORMANCE ANALYSIS:
 
+Total Queries Tracked: {results.get('total_queries', 0):,}
+Clicks Change: {results.get('total_clicks_delta', 0):+,} clicks ({results.get('total_clicks_pct_change', 0):+.1f}%)
+Impressions Change: {results.get('total_impr_delta', 0):+,} impressions ({results.get('total_impr_pct_change', 0):+.1f}%)
+CTR Change: {results.get('ctr_delta_pp', 0):+.2f} percentage points
+Top Winners: {len(results.get('top_winners', pd.DataFrame()))} queries with significant gains
+Top Losers: {len(results.get('top_losers', pd.DataFrame()))} queries with significant declines
 """
-    
-    for insight in results['integrated_insights']:
-        report += f"• {insight}\n"
-    
-    report += """
-===========================================
+
+def create_competitor_analysis_summary(results):
+    """Create analysis summary for AI insights - Competitors"""
+    return f"""COMPETITOR ANALYSIS:
+
+Top Competitors Identified: {len(results.get('top_competitors', []))}
+Your Keywords: {results.get('your_keywords_count', 0):,}
+Total Outrank Opportunities: {results.get('total_gaps', 0):,}
+Competitors with Data: {len(results.get('competitors_with_data', []))}
 """
-    
-    return report
 
-
-def comprehensive_report_tab():
-    st.header("📝 Comprehensive SEO Report (.docx)")
-    st.write("Upload the files you use elsewhere. Missing files will simply skip those sections.")
-
-    site_domain = st.text_input(
-        "Site domain for the report title (e.g., falconstructures.com)",
-        value="example.com",
-        key="cr_site_domain",
-    )
-
-    st.subheader("Semrush")
-    col1, col2 = st.columns(2)
-    with col1:
-        semrush_current = st.file_uploader("Positions — Current (CSV/XLSX)", type=["csv", "xlsx", "xls"], key="cr_sem_pos_cur")
-        semrush_prev    = st.file_uploader("Positions — Previous (CSV/XLSX)", type=["csv", "xlsx", "xls"], key="cr_sem_pos_prev")
-        semrush_changes = st.file_uploader("Position Changes (CSV/XLSX)",    type=["csv", "xlsx", "xls"], key="cr_sem_changes")
-    with col2:
-        semrush_pages = st.file_uploader("Pages (CSV/XLSX)",        type=["csv", "xlsx", "xls"], key="cr_sem_pages")
-        semrush_comp  = st.file_uploader("Competitors (CSV/XLSX)",  type=["csv", "xlsx", "xls"], key="cr_sem_comp")
-
-    st.subheader("Google Search Console")
-    gsc_queries = st.file_uploader("Queries Compare (CSV/XLSX)", type=["csv", "xlsx", "xls"], key="cr_gsc_queries")
-    gsc_pages   = st.file_uploader("Pages Compare (CSV/XLSX)",   type=["csv", "xlsx", "xls"], key="cr_gsc_pages")
-
-    if st.button("Generate Word Report", type="primary", use_container_width=True, key="cr_generate_btn"):
-        with st.spinner("Compiling Word document..."):
-            docx_bytes = build_seo_audit_docx(
-                site_domain=site_domain.strip() or "example.com",
-                semrush_current_df=_load_df(semrush_current),
-                semrush_prev_df=_load_df(semrush_prev),
-                semrush_changes_df=_load_df(semrush_changes),
-                semrush_pages_df=_load_df(semrush_pages),
-                semrush_comp_df=_load_df(semrush_comp),
-                gsc_queries_df=_load_df(gsc_queries),
-                gsc_pages_df=_load_df(gsc_pages),
-            )
-
-        st.success("Report generated.")
-        st.download_button(
-            label="📄 Download SEO Performance Report",
-            data=docx_bytes,
-            file_name=f"SEO_Performance_{(site_domain or 'example.com').replace('.', '_')}_{datetime.now().strftime('%Y%m%d')}.docx",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            use_container_width=True,
-            key="cr_download_btn",
-        )
-
-    st.caption("No charts render on-screen; they’re embedded inside the Word report.")
-
+# REMOVED: comprehensive_report_tab() has been removed
 
 
 if __name__ == "__main__":
